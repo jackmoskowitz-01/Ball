@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AUTOCODE — Live Demo</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #121821;
+    --panel2: #0e141c;
+    --border: #1f2937;
+    --text: #e5e9f0;
+    --dim: #8b96a5;
+    --accent: #4f9cf9;
+    --green: #34d399;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --home: #4f9cf9;
+    --away: #f87171;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 18px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .logo { font-weight: 800; letter-spacing: 2px; font-size: 15px; }
+  .logo span { color: var(--accent); }
+  .live {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12px; font-weight: 600; color: var(--red);
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--red);
+    animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  .scorebug {
+    display: flex; align-items: center; gap: 14px;
+    margin-left: auto;
+    font-size: 14px; font-weight: 700;
+  }
+  .scorebug .team-home { color: var(--home); }
+  .scorebug .team-away { color: var(--away); }
+  .clock { font-size: 15px; color: var(--text); min-width: 60px; text-align: center; }
+  .header-stat { font-size: 11px; color: var(--dim); text-align: right; line-height: 1.4; }
+  .header-stat b { color: var(--text); font-size: 13px; }
+  .header-stat.flagged b { color: var(--yellow); }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 10px;
+    padding: 10px;
+    min-height: 0;
+  }
+  .left-col { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex; flex-direction: column;
+    min-height: 0;
+  }
+  .panel-title {
+    padding: 8px 12px;
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1.2px;
+    color: var(--dim);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .feed-panel { flex: 1.4; }
+  .feed-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 10px; min-height: 0; }
+  canvas#court { max-width: 100%; max-height: 100%; border-radius: 6px; }
+
+  .conf-panel { flex: 1; }
+  .conf-body { flex: 1; overflow-y: auto; padding: 6px 8px; }
+  .conf-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 8px; margin-bottom: 4px;
+    background: var(--panel2);
+    border-radius: 5px;
+    border-left: 3px solid var(--green);
+    font-size: 12px;
+    animation: slidein .25s ease;
+  }
+  @keyframes slidein { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  .conf-row.flag { border-left-color: var(--yellow); }
+  .conf-row .time { color: var(--dim); font-size: 11px; min-width: 40px; }
+  .conf-row .label { flex: 1; font-weight: 600; }
+  .conf-row .pct { font-weight: 700; font-size: 11px; color: var(--green); }
+  .conf-row.flag .pct { color: var(--yellow); }
+  .conf-row .flag-badge {
+    font-size: 9px; font-weight: 700; color: #000;
+    background: var(--yellow); border-radius: 3px; padding: 1px 5px;
+  }
+
+  .code-body { flex: 1; overflow-y: auto; padding: 10px; }
+  .btn-group { margin-bottom: 12px; }
+  .btn-group-label {
+    font-size: 10px; font-weight: 700; color: var(--dim);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;
+  }
+  .btn-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .btn-grid.wide { grid-template-columns: repeat(2, 1fr); }
+  .btn-grid.three { grid-template-columns: repeat(3, 1fr); }
+  .code-btn {
+    padding: 7px 4px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 11px; font-weight: 600;
+    text-align: center;
+    color: var(--dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: all .12s;
+  }
+  .code-btn.fire {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 14px rgba(79,156,249,.55);
+    transform: scale(1.05);
+  }
+  .code-btn.fire-green { background: var(--green); border-color: var(--green); color: #06281c; box-shadow: 0 0 14px rgba(52,211,153,.55); transform: scale(1.05); }
+  .code-btn.fire-red { background: var(--red); border-color: var(--red); color: #fff; box-shadow: 0 0 14px rgba(248,113,113,.55); transform: scale(1.05); }
+
+  .timeline-panel {
+    flex-shrink: 0;
+    height: 245px;
+    margin: 0 10px 10px;
+  }
+  .tl-body { flex: 1; display: flex; min-height: 0; overflow-y: auto; }
+  .tl-labels { flex-shrink: 0; width: 110px; border-right: 1px solid var(--border); }
+  .tl-label {
+    height: 20px; line-height: 20px;
+    font-size: 10px; font-weight: 600; color: var(--dim);
+    padding: 0 8px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    border-bottom: 1px solid rgba(31,41,55,.5);
+  }
+  .tl-tracks { flex: 1; position: relative; overflow: hidden; }
+  .tl-row {
+    height: 20px;
+    border-bottom: 1px solid rgba(31,41,55,.5);
+    position: relative;
+  }
+  .tl-inst {
+    position: absolute; top: 3px; height: 14px;
+    border-radius: 3px;
+    min-width: 5px;
+    opacity: .95;
+    animation: instpop .3s ease;
+  }
+  @keyframes instpop { from { transform: scaleX(.3); opacity: 0; } to { transform: none; opacity: .95; } }
+  .playhead {
+    position: absolute; top: 0; bottom: 0; width: 1px;
+    background: var(--red);
+    z-index: 5;
+  }
+  .tl-count { color: var(--accent); margin-left: auto; font-weight: 700; }
+  footer {
+    padding: 5px 18px; font-size: 10px; color: var(--dim);
+    border-top: 1px solid var(--border); background: var(--panel);
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">AUTO<span>CODE</span></div>
+  <div class="live"><div class="live-dot"></div>AI Coding Live</div>
+  <div class="scorebug mono">
+    <span class="team-home">HOME <span id="score-home">0</span></span>
+    <span class="clock" id="clock">20:00</span>
+    <span class="team-away"><span id="score-away">0</span> OPP</span>
+  </div>
+  <div class="header-stat"><b id="inst-count">0</b><br>instances</div>
+  <div class="header-stat flagged"><b id="flag-count">0</b><br>flagged for review</div>
+  <div class="header-stat"><b id="latency">1.8s</b><br>avg latency</div>
+</header>
+
+<main>
+  <div class="left-col">
+    <div class="panel feed-panel">
+      <div class="panel-title">Live Feed — Perception Layer (tracking overlay)</div>
+      <div class="feed-body"><canvas id="court" width="940" height="500"></canvas></div>
+    </div>
+    <div class="panel conf-panel">
+      <div class="panel-title">AI Decisions — confidence per instance (yellow = post-game review queue)</div>
+      <div class="conf-body" id="conf-body"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Code Window — buttons fire as the AI "clicks"</div>
+    <div class="code-body">
+      <div class="btn-group">
+        <div class="btn-group-label">Players</div>
+        <div class="btn-grid" id="grp-players"></div>
+      </div>
+      <div class="btn-group">
+        <div class="btn-group-label">Shot Context</div>
+        <div class="btn-grid wide" id="grp-context"></div>
+      </div>
+      <div class="btn-group">
+        <div class="btn-group-label">Result</div>
+        <div class="btn-grid" id="grp-result"></div>
+      </div>
+      <div class="btn-group">
+        <div class="btn-group-label">Stats</div>
+        <div class="btn-grid" id="grp-stats"></div>
+      </div>
+      <div class="btn-group">
+        <div class="btn-group-label">Game State</div>
+        <div class="btn-grid three" id="grp-state"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="panel timeline-panel">
+  <div class="panel-title">SportsCode Timeline — building live <span class="tl-count mono" id="tl-count">0 instances</span></div>
+  <div class="tl-body">
+    <div class="tl-labels" id="tl-labels"></div>
+    <div class="tl-tracks" id="tl-tracks"><div class="playhead" id="playhead"></div></div>
+  </div>
+</div>
+
+<footer>SIMULATED DEMO — scripted game engine standing in for the perception stack. Real product: HDMI/SDI feed in → YOLOv8 + BoT-SORT + jersey OCR + game-state FSM → this exact output, exported as SportsCode XML.</footer>
+
+<script>
+// ---------------- config ----------------
+const ROSTER = ["Jonah", "Sario", "Jennings", "Carter", "Ward", "Hill", "Okafor", "Reyes"];
+const CONTEXTS = ["Transition 3FG", "Swing 3FG", "No Assist 3FG", "Kick Out 3FG", "Contested FG", "Uncontested FG"];
+const RESULTS = ["+2FG", "-2FG", "+3FG", "-3FG"];
+const STATS = ["ORB", "DRB", "ASST", "BLK", "STL", "TO", "FF", "FA"];
+const STATES = ["Possession", "Transition", "Half-Court"];
+const TL_ROWS = ["Possession", "Transition", ...ROSTER.slice(0, 5), "3FG", "2FG", "ORB", "DRB", "ASST", "TO", "Foul"];
+const HALF_SECONDS = 20 * 60;
+const SIM_SPEED = 12; // game-seconds per real second
+
+// ---------------- build UI ----------------
+const btnEls = {};
+function buildButtons(groupId, names) {
+  const grp = document.getElementById(groupId);
+  names.forEach(n => {
+    const b = document.createElement("div");
+    b.className = "code-btn";
+    b.textContent = n;
+    grp.appendChild(b);
+    btnEls[n] = b;
+  });
+}
+buildButtons("grp-players", ROSTER);
+buildButtons("grp-context", CONTEXTS);
+buildButtons("grp-result", RESULTS);
+buildButtons("grp-stats", STATS);
+buildButtons("grp-state", STATES);
+
+const rowEls = {};
+const labelsEl = document.getElementById("tl-labels");
+const tracksEl = document.getElementById("tl-tracks");
+TL_ROWS.forEach(r => {
+  const l = document.createElement("div");
+  l.className = "tl-label";
+  l.textContent = r;
+  labelsEl.appendChild(l);
+  const row = document.createElement("div");
+  row.className = "tl-row";
+  tracksEl.appendChild(row);
+  rowEls[r] = row;
+});
+
+// ---------------- game state ----------------
+let gameClock = HALF_SECONDS;
+let scoreHome = 0, scoreAway = 0;
+let instCount = 0, flagCount = 0;
+let running = true;
+
+function fmtClock(s) {
+  s = Math.max(0, Math.ceil(s));
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+function elapsedFrac() { return 1 - gameClock / HALF_SECONDS; }
+
+function flash(name, cls) {
+  const b = btnEls[name];
+  if (!b) return;
+  const c = cls || "fire";
+  b.classList.add(c);
+  setTimeout(() => b.classList.remove(c), 650);
+}
+
+const ROW_COLORS = {
+  "Possession": "#334155", "Transition": "#7c3aed",
+  "3FG": "#4f9cf9", "2FG": "#38bdf8",
+  "ORB": "#f59e0b", "DRB": "#a3a3a3",
+  "ASST": "#34d399", "TO": "#f87171", "Foul": "#fb923c"
+};
+function addInstance(row, durSec) {
+  const el = rowEls[row];
+  if (!el) return;
+  const inst = document.createElement("div");
+  inst.className = "tl-inst";
+  const startFrac = Math.max(0, elapsedFrac() - durSec / HALF_SECONDS);
+  inst.style.left = (startFrac * 100) + "%";
+  inst.style.width = Math.max(0.5, durSec / HALF_SECONDS * 100) + "%";
+  inst.style.background = ROW_COLORS[row] || "#4f9cf9";
+  el.appendChild(inst);
+  instCount++;
+  document.getElementById("inst-count").textContent = instCount;
+  document.getElementById("tl-count").textContent = instCount + " instances";
+}
+
+function addConfidence(label) {
+  const conf = 62 + Math.random() * 37;
+  const flagged = conf < 70;
+  if (flagged) {
+    flagCount++;
+    document.getElementById("flag-count").textContent = flagCount;
+  }
+  const body = document.getElementById("conf-body");
+  const row = document.createElement("div");
+  row.className = "conf-row" + (flagged ? " flag" : "");
+  row.innerHTML =
+    '<span class="time mono">' + fmtClock(gameClock) + '</span>' +
+    '<span class="label">' + label + '</span>' +
+    (flagged ? '<span class="flag-badge">REVIEW</span>' : '') +
+    '<span class="pct mono">' + conf.toFixed(0) + '%</span>';
+  body.prepend(row);
+  while (body.children.length > 40) body.removeChild(body.lastChild);
+}
+
+// ---------------- court sim ----------------
+const cv = document.getElementById("court");
+const ctx = cv.getContext("2d");
+const W = cv.width, H = cv.height;
+const players = [];
+for (let i = 0; i < 10; i++) {
+  players.push({
+    team: i < 5 ? 0 : 1,
+    idx: i % 5,
+    x: Math.random() * W, y: Math.random() * H,
+    tx: Math.random() * W, ty: Math.random() * H
+  });
+}
+const ball = { x: W / 2, y: H / 2, tx: W / 2, ty: H / 2, holder: 0, shooting: false };
+let offenseTeam = 0; // 0 = home attacks right hoop
+
+function retarget() {
+  const attackX = offenseTeam === 0 ? W * 0.72 : W * 0.28;
+  const defendX = attackX;
+  players.forEach(p => {
+    const base = p.team === offenseTeam ? attackX : defendX + (offenseTeam === 0 ? -40 : 40);
+    p.tx = base + (Math.random() - 0.5) * W * 0.42;
+    p.ty = H * 0.12 + Math.random() * H * 0.76;
+    p.tx = Math.max(20, Math.min(W - 20, p.tx));
+  });
+}
+retarget();
+setInterval(retarget, 2600);
+
+function shootBall(made) {
+  const hoopX = offenseTeam === 0 ? W - 34 : 34;
+  ball.shooting = true;
+  ball.tx = hoopX; ball.ty = H / 2;
+  setTimeout(() => {
+    ball.shooting = false;
+    if (!made) { ball.tx += (Math.random() - 0.5) * 120; ball.ty += (Math.random() - 0.5) * 120; }
+  }, 700);
+}
+
+function drawCourt() {
+  ctx.fillStyle = "#17202b";
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "#2a3646";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(10, 10, W - 20, H - 20);
+  ctx.beginPath(); ctx.moveTo(W / 2, 10); ctx.lineTo(W / 2, H - 10); ctx.stroke();
+  ctx.beginPath(); ctx.arc(W / 2, H / 2, 55, 0, Math.PI * 2); ctx.stroke();
+  // arcs + hoops
+  [34, W - 34].forEach(hx => {
+    ctx.beginPath();
+    ctx.arc(hx, H / 2, 210, hx < W / 2 ? -Math.PI / 2 : Math.PI / 2, hx < W / 2 ? Math.PI / 2 : Math.PI * 1.5);
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(hx, H / 2, 8, 0, Math.PI * 2);
+    ctx.strokeStyle = "#e5734f"; ctx.stroke();
+    ctx.strokeStyle = "#2a3646";
+    // paint
+    const px = hx < W / 2 ? 10 : W - 130;
+    ctx.strokeRect(px, H / 2 - 70, 120, 140);
+  });
+}
+
+function drawFrame() {
+  drawCourt();
+  players.forEach(p => {
+    const sp = 0.045;
+    p.x += (p.tx - p.x) * sp;
+    p.y += (p.ty - p.y) * sp;
+    // tracking box
+    ctx.strokeStyle = p.team === 0 ? "rgba(79,156,249,.5)" : "rgba(248,113,113,.5)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(p.x - 12, p.y - 16, 24, 32);
+    ctx.fillStyle = p.team === 0 ? "#4f9cf9" : "#f87171";
+    ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 9px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(p.team === 0 ? ROSTER[p.idx].slice(0, 3).toUpperCase() : "#" + (p.idx + 10), p.x, p.y - 20);
+  });
+  if (!ball.shooting) {
+    const holder = players.filter(p => p.team === offenseTeam)[ball.holder % 5];
+    ball.tx = holder.x + 12; ball.ty = holder.y;
+  }
+  ball.x += (ball.tx - ball.x) * (ball.shooting ? 0.18 : 0.12);
+  ball.y += (ball.ty - ball.y) * (ball.shooting ? 0.18 : 0.12);
+  ctx.fillStyle = "#f59e0b";
+  ctx.beginPath(); ctx.arc(ball.x, ball.y, 5, 0, Math.PI * 2); ctx.fill();
+  requestAnimationFrame(drawFrame);
+}
+drawFrame();
+setInterval(() => { ball.holder = Math.floor(Math.random() * 5); }, 1400);
+
+// ---------------- event engine ----------------
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function weighted(pairs) {
+  const total = pairs.reduce((s, p) => s + p[1], 0);
+  let r = Math.random() * total;
+  for (const [v, w] of pairs) { r -= w; if (r <= 0) return v; }
+  return pairs[0][0];
+}
+
+function runPossession() {
+  if (!running) return;
+  offenseTeam = offenseTeam === 0 ? 1 : 0;
+  const isHome = offenseTeam === 0;
+  const transition = Math.random() < 0.28;
+  const possLen = transition ? 4 + Math.random() * 4 : 10 + Math.random() * 16;
+
+  flash("Possession");
+  flash(transition ? "Transition" : "Half-Court");
+  addInstance("Possession", possLen);
+  if (transition) addInstance("Transition", possLen);
+
+  const outcome = weighted([
+    ["make2", 28], ["miss2", 22], ["make3", 13], ["miss3", 17], ["to", 11], ["foul", 9]
+  ]);
+  const shooter = pick(ROSTER.slice(0, 5));
+  const shooterRowOk = TL_ROWS.includes(shooter);
+
+  setTimeout(() => {
+    if (!running) return;
+    if (outcome === "to") {
+      flash("TO", "fire-red");
+      addInstance("TO", 3);
+      addConfidence((isHome ? shooter : "OPP") + " — Turnover");
+      if (isHome && Math.random() < 0.5) { flash("STL", "fire-green"); }
+      return;
+    }
+    if (outcome === "foul") {
+      flash(isHome ? "FA" : "FF");
+      addInstance("Foul", 3);
+      addConfidence("Foul — " + (isHome ? "drawn by " + shooter : "on defense"));
+      if (Math.random() < 0.6) { const pts = pick([1, 2]); if (isHome) scoreHome += pts; else scoreAway += pts; }
+      return;
+    }
+    const three = outcome.includes("3");
+    const made = outcome.startsWith("make");
+    shootBall(made);
+    const context = three
+      ? (transition ? "Transition 3FG" : pick(["Swing 3FG", "Kick Out 3FG", "No Assist 3FG"]))
+      : pick(["Contested FG", "Uncontested FG"]);
+    const result = (made ? "+" : "-") + (three ? "3FG" : "2FG");
+
+    if (isHome) { flash(shooter); }
+    flash(context);
+    flash(result, made ? "fire-green" : "fire-red");
+    addInstance(three ? "3FG" : "2FG", 4);
+    if (isHome && shooterRowOk) addInstance(shooter, 4);
+    addConfidence((isHome ? shooter : "OPP") + " — " + context + " " + result);
+
+    if (made) {
+      if (isHome) scoreHome += three ? 3 : 2; else scoreAway += three ? 3 : 2;
+      if (Math.random() < 0.58 && !context.includes("No Assist")) {
+        setTimeout(() => { flash("ASST", "fire-green"); addInstance("ASST", 3); }, 350);
+      }
+    } else {
+      setTimeout(() => {
+        if (!running) return;
+        const orb = Math.random() < 0.27;
+        flash(orb ? "ORB" : "DRB");
+        addInstance(orb ? "ORB" : "DRB", 3);
+        addConfidence((orb ? "Offensive" : "Defensive") + " rebound");
+        if (!orb && Math.random() < 0.15) flash("BLK", "fire-green");
+      }, 800);
+    }
+    document.getElementById("score-home").textContent = scoreHome;
+    document.getElementById("score-away").textContent = scoreAway;
+  }, 900 + Math.random() * 800);
+
+  const nextIn = (possLen / SIM_SPEED) * 1000 + 600;
+  setTimeout(runPossession, nextIn);
+}
+
+// clock
+setInterval(() => {
+  if (!running) return;
+  gameClock -= SIM_SPEED / 10;
+  if (gameClock <= 0) {
+    gameClock = 0;
+    running = false;
+    document.querySelector(".live").innerHTML = "HALF — TIMELINE READY FOR EXPORT";
+    document.querySelector(".live").style.color = "var(--green)";
+  }
+  document.getElementById("clock").textContent = fmtClock(gameClock);
+  document.getElementById("playhead").style.left = (elapsedFrac() * 100) + "%";
+}, 100);
+
+// latency jitter for flavor
+setInterval(() => {
+  document.getElementById("latency").textContent = (1.4 + Math.random() * 1.2).toFixed(1) + "s";
+}, 3000);
+
+setTimeout(runPossession, 800);
+</script>
+</body>
+</html>
