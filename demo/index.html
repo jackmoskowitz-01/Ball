@@ -111,28 +111,52 @@
   }
   .tl-tool { text-align: center; color: #48505a; font-size: 10px; }
   .tl-tool .ico { font-size: 15px; display: block; margin-bottom: 1px; }
-  .tl-body { background: #1b1b1d; max-height: 250px; overflow-y: auto; }
-  #tl-rows { position: relative; }
-  .tl-ruler {
-    display: flex; height: 18px; align-items: center;
-    padding-left: 132px; color: #7f868d; font-size: 9px; gap: 46px;
-    border-bottom: 1px solid #2a2b2e; position: sticky; top: 0; background: #202124; z-index: 2;
-  }
-  .tl-track { display: flex; height: 22px; border-bottom: 1px solid #2a2b2e; }
+  .tl-body { background: #1b1b1d; height: 250px; display: flex; overflow: hidden; }
+  .tl-side { width: 132px; flex-shrink: 0; overflow: hidden; border-right: 1px solid #2a2b2e; background: #1b1b1d; }
+  .tl-ruler-spacer { height: 18px; background: #202124; border-bottom: 1px solid #2a2b2e; position: relative; z-index: 2; }
+  #tl-names { position: relative; will-change: transform; }
+  #tl-canvas { flex: 1; min-width: 0; height: 100%; display: block; outline: none; }
   .tl-name {
-    width: 132px; flex-shrink: 0; display: flex; align-items: center;
+    display: flex; align-items: center;
     padding: 0 10px; font-size: 11px; font-weight: 600; color: #d6d9dd;
-    border-right: 1px solid #2a2b2e;
+    border-bottom: 1px solid #2a2b2e;
+    white-space: nowrap; overflow: hidden;
+    cursor: default; user-select: none; -webkit-user-select: none;
+    box-sizing: border-box;
   }
-  .tl-track.team-home .tl-name, .tl-track.team-home .tl-lane { background: #7d1f1f; }
-  .tl-track.team-away .tl-name { background: #111; }
-  .tl-lane { flex: 1; position: relative; }
-  .tl-inst {
-    position: absolute; top: 5px; height: 12px; width: 3px;
-    background: #e7e7e7; border-radius: 1px;
+  .tl-rename {
+    width: 100%; background: #2a2d31; border: 1px solid #4f9cf9; border-radius: 3px;
+    color: #e7e9ec; font-size: 11px; font-weight: 600; padding: 1px 4px; outline: none;
   }
-  .tl-track.team-home .tl-inst { background: #ffdede; }
-  .tl-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff3b30; z-index: 3; }
+  /* context menu */
+  .tl-menu {
+    position: fixed; z-index: 300; min-width: 160px;
+    background: #24262a; border: 1px solid #3a3d42; border-radius: 6px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.5); padding: 4px; font-size: 12px; color: #d6d9dd;
+  }
+  .tl-menu-item { padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+  .tl-menu-item:hover { background: #3a6ea5; color: #fff; }
+  .tl-menu-sep { height: 1px; background: #3a3d42; margin: 4px 6px; }
+  /* playlist HUD (matches the video-controls pill) */
+  #playlist-hud {
+    display: none;
+    position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
+    background: rgba(20,22,26,.85); border-radius: 10px; padding: 7px 12px;
+    backdrop-filter: blur(4px); text-align: center; z-index: 5;
+  }
+  #playlist-hud.show { display: block; }
+  #playlist-hud .pl-title { color: #e8ebef; font-size: 11px; font-weight: 600; margin-bottom: 5px; white-space: nowrap; }
+  #playlist-hud .pl-row { display: flex; align-items: center; gap: 4px; justify-content: center; }
+  #playlist-hud .pl-speed { width: auto; padding: 0 8px; font-size: 12px; }
+  #playlist-hud .pl-return { width: auto; padding: 0 10px; font-size: 11px; font-weight: 700; }
+  /* transient message */
+  #tl-msg {
+    display: none;
+    position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%);
+    background: rgba(0,0,0,.72); color: #fff; font-size: 12px; font-weight: 600;
+    padding: 6px 14px; border-radius: 6px; z-index: 6; white-space: nowrap;
+  }
+  #tl-msg.show { display: block; }
 
   /* ===== RIGHT: code window ===== */
   .code-toolbar {
@@ -277,8 +301,11 @@
         <div class="tl-tool mono" id="tl-count" style="color:#3a6ea5;font-weight:700;font-size:11px">0 instances</div>
       </div>
       <div class="tl-body">
-        <div class="tl-ruler" id="tl-ruler"></div>
-        <div id="tl-rows"></div>
+        <div class="tl-side">
+          <div class="tl-ruler-spacer"></div>
+          <div id="tl-names"></div>
+        </div>
+        <canvas id="tl-canvas"></canvas>
       </div>
     </div>
   </div>
@@ -365,6 +392,7 @@
 
 <footer>SIMULATED DEMO — scripted game engine standing in for the perception stack. Real product: HDMI/SDI feed → YOLO11 + BoT-SORT + jersey OCR + game-state FSM → SportsCode XML. Left feed = live player &amp; ball tracking on real footage.</footer>
 
+<script src="timeline.js?v=4"></script>
 <script>
 /* ============ config / taxonomy (unchanged "basics") ============ */
 const ROSTER = [
@@ -378,7 +406,6 @@ const HALF_SECONDS = 20*60;
 const SIM_SPEED = 12;
 
 /* ============ state ============ */
-const gameInstances = [];
 const playerStats = {}; ROSTER.forEach(p=>playerStats[p.name]={pts:0,reb:0,ast:0});
 let gameClock = HALF_SECONDS, scoreHome=0, scoreAway=0;
 let instCount=0, flagCount=0, possCount=0, running=true;
@@ -404,41 +431,37 @@ function selectPlayer(p){
 /* register action buttons */
 document.querySelectorAll(".cbtn").forEach(el=>{ btnEls[el.dataset.code]=el; });
 
-/* ============ timeline ============ */
-const TL_ROWS = [
-  {name:"HDL",cls:"team-home"},{name:"CLF",cls:"team-away"},
-  ...STARTERS.map(p=>({name:p.name,cls:""})),
-  {name:"3FG",cls:""},{name:"2FG",cls:""},{name:"ORB",cls:""},{name:"DRB",cls:""},
-  {name:"ASST",cls:""},{name:"TO",cls:""},{name:"Foul",cls:""}
-];
-const rowEls={};
-const rowsC=document.getElementById("tl-rows");
-TL_ROWS.forEach(r=>{
-  const t=document.createElement("div"); t.className="tl-track "+r.cls;
-  const n=document.createElement("div"); n.className="tl-name"; n.textContent=r.name;
-  const l=document.createElement("div"); l.className="tl-lane";
-  t.appendChild(n); t.appendChild(l); rowsC.appendChild(t); rowEls[r.name]=l;
+/* ============ timeline engine (timeline.js) ============ */
+const vid=document.getElementById("vid");
+TL.init({
+  canvas:document.getElementById("tl-canvas"),
+  namesEl:document.getElementById("tl-names"),
+  video:vid,
+  onCount:n=>{ document.getElementById("tl-count").textContent=n+" instances"; }
 });
-// ruler + playhead
-const ruler=document.getElementById("tl-ruler");
-["00:00","04:00","08:00","12:00","16:00","20:00"].forEach(t=>{const s=document.createElement("span");s.textContent=t;ruler.appendChild(s);});
-const playhead=document.createElement("div"); playhead.className="tl-playhead"; playhead.style.left="132px"; rowsC.appendChild(playhead);
+// default tracks — same rows/order/colors as before
+TL.addTrack("HDL",{teamRow:true});
+TL.addTrack("CLF",{cls:"team-away"});
+STARTERS.forEach(p=>TL.addTrack(p.name));
+["3FG","2FG","ORB","DRB","ASST","TO","Foul"].forEach(n=>TL.addTrack(n));
 
 function elapsedFrac(){ return 1 - gameClock/HALF_SECONDS; }
 function elapsedSec(){ return HALF_SECONDS - gameClock; }
 function fmtClock(s){ s=Math.max(0,Math.ceil(s)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
 
 function addInstance(row,durSec,label,conf){
-  const lane=rowEls[row];
-  if(lane){
-    const inst=document.createElement("div"); inst.className="tl-inst";
-    inst.style.left=(Math.max(0,elapsedFrac()-durSec/HALF_SECONDS)*100)+"%";
-    lane.appendChild(inst);
-  }
+  const start=Math.max(0,elapsedSec()-durSec);
+  TL.addLiveEvent({
+    track:row, label:label||row,
+    gameSec:start, duration:durSec,
+    confidence:conf||90, quarter:2,
+    team:row==="CLF"?"CLF":"HDL",
+    gameClock:fmtClock(gameClock),
+    wallTime:Date.now(),
+    metadata:{sim:true}
+  });
   instCount++;
   document.getElementById("k-inst").textContent=instCount;
-  document.getElementById("tl-count").textContent=instCount+" instances";
-  gameInstances.push({row,label:label||row,startSec:Math.max(0,elapsedSec()-durSec),endSec:elapsedSec(),conf:conf||90});
 }
 
 /* ============ confidence / accuracy (kept, surfaced in KPIs) ============ */
@@ -545,13 +568,12 @@ setInterval(()=>{
     document.getElementById("live-label").textContent="HALFTIME";
   }
   document.getElementById("v-clock").textContent=fmtClock(gameClock);
-  playhead.style.left=("calc(132px + "+(elapsedFrac()*100)+"% - "+(elapsedFrac()*132)+"px)");
+  TL.setLiveEdge(elapsedSec());
 },100);
 setInterval(()=>{document.getElementById("k-lat").textContent=(1.4+Math.random()*1.2).toFixed(1)+"s";},3000);
 setTimeout(runPossession,800);
 
 /* ============ video controls ============ */
-const vid=document.getElementById("vid");
 // try tracked feed, fall back gracefully
 vid.src="tracked.mp4";
 vid.addEventListener("error",()=>{ document.querySelector(".video-wrap").style.background="#11161c"; });
@@ -562,15 +584,23 @@ function vskip(d){ vid.currentTime=Math.max(0,(vid.currentTime||0)+d); }
 /* ============ XML export (unchanged "basics") ============ */
 function exportXML(){
   const gameId="GAME_"+new Date().toISOString().slice(0,10).replace(/-/g,"");
-  const rows=[...new Set(gameInstances.map(i=>i.row))];
+  // export straight from the timeline event DB (includes manual edits)
+  const evs=TL.getAllEvents();
+  const byRow=new Map();
+  evs.forEach(e=>{
+    const row=e.trackName;
+    if(!byRow.has(row))byRow.set(row,[]);
+    byRow.get(row).push(e);
+  });
   let xml=`<?xml version="1.0" encoding="UTF-8"?>\n<file version="2">\n  <ALL_INSTANCES>\n`;
-  rows.forEach(row=>{
-    const insts=gameInstances.filter(i=>i.row===row); if(!insts.length)return;
+  byRow.forEach((insts,row)=>{
+    insts.sort((a,b)=>a.gameSec-b.gameSec);
     xml+=`    <instance>\n      <ID>${row}</ID>\n`;
     insts.forEach((inst,idx)=>{
-      xml+=`      <label>\n        <pos>${idx+1}</pos>\n        <time>${inst.startSec.toFixed(2)}</time>\n`+
-           `        <dur>${(inst.endSec-inst.startSec).toFixed(2)}</dur>\n        <end>${inst.endSec.toFixed(2)}</end>\n`+
-           `        <code>${inst.label}</code>\n        <conf>${inst.conf.toFixed(1)}</conf>\n      </label>\n`;
+      xml+=`      <label>\n        <pos>${idx+1}</pos>\n        <time>${inst.gameSec.toFixed(2)}</time>\n`+
+           `        <dur>${inst.duration.toFixed(2)}</dur>\n        <end>${(inst.gameSec+inst.duration).toFixed(2)}</end>\n`+
+           `        <code>${inst.label}</code>\n        <conf>${inst.confidence.toFixed(1)}</conf>\n`+
+           `        <source>${inst.source}${inst.overridden?" (edited)":""}</source>\n      </label>\n`;
     });
     xml+=`    </instance>\n`;
   });
