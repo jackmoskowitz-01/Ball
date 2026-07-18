@@ -1,0 +1,6 @@
+# AUTOCODE perception pipeline — install with:
+#   python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+ultralytics>=8.4        # YOLO11 detection + ByteTrack (pulls torch w/ Apple-Silicon MPS)
+easyocr>=1.7            # jersey-number OCR
+opencv-python>=4.9
+numpy

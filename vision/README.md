@@ -1,38 +1,102 @@
-# vision / player + ball tracking
+# vision / AUTOCODE perception pipeline
 
-YOLO11 perception experiments for AUTOCODE, run on real broadcast footage
-(NBA 2K26 Summer League, WSH vs UTAH).
+Track **players (with real jersey numbers), the ball, and the basket** in
+broadcast basketball film. One command per game.
 
-## Scripts
+Validated on NBA 2K26 Summer League broadcast footage (WSH vs UTAH).
 
-### `detect_ball_players.py` (current)
-Tracks players **and** the basketball:
-- **Players:** YOLO11 + ByteTrack (`tracker_stable.yaml`, big buffer) → each
-  player keeps a stable `P##` id through occlusions.
-- **Court filter:** a detection only counts if the floor under its feet is
-  hardwood-colored (bench/crowd sit on the red apron → dropped). Follows the
-  camera automatically; boxes taller than 28% of frame height always pass.
-- **Ball:** high-res (1280) low-conf `sports ball` detection, best-per-frame
-  with a continuity bonus toward the last known position, hold across short
-  gaps (`BALL?` = held), teleport-proof motion trail.
+## Setup (one time, ~5 min)
 
-```
-python detect_ball_players.py IN.mov OUT.mp4 \
-    [--conf 0.30] [--min-h 0.05] [--tall-h 0.28] [--wood-frac 0.40] \
-    [--ball-conf 0.10] [--ball-hold 10] [--ball-top 0.22] [--model yolo11x.pt]
-```
-
-Note: OpenCV writes `mp4v`, which browsers won't play. For the demo page:
-`ffmpeg -i OUT.mp4 -c:v libx264 -pix_fmt yuv420p -movflags +faststart demo/tracked.mp4`
-
-### `detect_players.py` (v1)
-Person-only detection + ByteTrack, size filter only. Kept for reference.
-
-## Setup (one time)
+    cd vision
     python3 -m venv venv && source venv/bin/activate
-    pip install ultralytics            # pulls torch (MPS/Apple-Silicon accelerated)
+    pip install -r requirements.txt
 
-## Next steps
-- Jersey-number OCR → map `P##` ids to real roster numbers (60, 44, 19…)
-- Team split by jersey color (red = WSH, white = UTAH)
-- Court homography → shot chart x,y in court coordinates
+Model weights (YOLO11, ~110MB; OCR models ~65MB) download automatically on
+first run. Everything runs locally after that — no cloud, gym WiFi optional.
+
+## Run a game
+
+    python track_game.py GAME.mp4 GAME_tracked.mp4 \
+        --roster "5,13,19,33,58,30,36,44,60,77"
+
+Pass both teams' jersey numbers in `--roster` — OCR reads that don't match
+a rostered number are discarded, which is what keeps low-resolution
+misreads (58→59, 36→38) off your film. Run without it and the pipeline
+still works, just with less protection against wrong numbers.
+
+What you get, drawn on every frame:
+- **Players**: green boxes labeled with their real jersey number (`#44`)
+  once OCR is confident, `P<id>` before that. Bench and crowd are filtered
+  out automatically (hardwood-under-feet court test).
+- **Ball**: orange marker + motion trail. Solid `BALL` = detected this
+  frame; `BALL?` = briefly occluded, position extrapolated along its
+  velocity (so passes and shot arcs stay tracked).
+- **Basket**: yellow `BASKET` box, template-tracked through camera pans;
+  hides honestly when the rim is off-frame or occluded.
+
+For web/QuickTime playback, re-encode the output:
+
+    ffmpeg -i GAME_tracked.mp4 -c:v libx264 -pix_fmt yuv420p -movflags +faststart final.mp4
+
+## Basket calibration (once per venue/camera)
+
+Auto-acquire tries to find the rim itself, but only trusts a confident,
+unambiguous match — otherwise the basket overlay is disabled and it tells
+you. The reliable path (30 seconds, once per venue):
+
+    python track_game.py GAME.mp4 out.mp4 --dump-frame frame0.png
+    # open frame0.png in Preview, note the backboard box: x, y, width, height
+    python track_game.py GAME.mp4 out.mp4 --rim 179,101,90,95
+
+Template tracking handles camera pans from there.
+
+## Tuning knobs (defaults are sane)
+
+| flag | default | what it does |
+|---|---|---|
+| `--conf` | 0.30 | player detection threshold |
+| `--min-h` / `--tall-h` | 0.05 / 0.28 | size filters (frame-height fractions) |
+| `--wood-frac` | 0.40 | court-filter strictness (lower = keep more people) |
+| `--roster` | — | valid jersey numbers, comma-separated (**use it** — kills misreads) |
+| `--ocr-every` | 3 | OCR cadence per track (higher = faster, slower to name) |
+| `--no-ocr` | — | skip jersey OCR entirely (fastest) |
+| `--ball-imgsz` | 1536 | ball detection resolution (higher = finds smaller balls) |
+| `--ball-hold` | 24 | frames to extrapolate an occluded ball |
+| `--no-basket` | — | skip basket tracking |
+
+## How it works
+
+- **Players** — YOLO11x + ByteTrack (`tracker_stable.yaml`, large buffer so
+  ids survive occlusions) + court filter: a detection only counts if the
+  floor under its feet is hardwood-colored.
+- **Jerseys** — every few frames each unresolved track's torso band is
+  OCR'd (digits only, 3× upscale); reads accumulate confidence-weighted
+  votes per track id; a number is locked in after ≥2 consistent reads.
+- **Ball** — full-frame low-conf detection at high resolution, fused with a
+  constant-velocity model: candidates are gated by distance to the
+  predicted position (shot arcs pass the gate, crowd false-positives
+  don't); on a miss the position extrapolates along the velocity and two
+  zoomed re-detects run — at the prediction and *ahead* of it (fast passes
+  outrun a damped prediction); a basketball-color prior breaks ties.
+- **Basket** — normalized cross-correlation template tracking with local
+  search + global rescan, threshold 0.5, from a one-time calibration (or a
+  confident auto-acquire).
+
+## Known limits (read before selling it to your coaches)
+
+- Jersey numbers resolve only when a track's torso is visible and big
+  enough; expect the first few seconds of a possession before names lock.
+- The ball still drops for stretches where it's fully hidden behind
+  bodies. The marker goes away rather than guessing — the durable fix is a
+  small fine-tuned ball/rim detector, which is the top item on the
+  perception roadmap.
+- Auto rim acquisition is best-effort by design; calibrate with `--rim`
+  for production use.
+
+## Roadmap
+
+1. Fine-tuned basketball detector (ball + rim classes) — removes the two
+   limits above
+2. Team split by jersey color; roster CSV → number-to-name mapping
+3. Court homography → shot-chart x,y and possession geometry
+4. Shot/make/miss events from ball-rim interaction → SportsCode XML
