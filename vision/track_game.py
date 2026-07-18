@@ -61,6 +61,8 @@ ap.add_argument("--rim", default=None, help="manual rim calibration 'x,y,w,h' fr
 ap.add_argument("--no-basket", action="store_true")
 ap.add_argument("--dump-frame", default=None, metavar="PNG",
                 help="write frame 0 to PNG (for reading --rim coordinates) and exit")
+ap.add_argument("--export-json", default=None, metavar="JSON",
+                help="write per-frame tracking data (players+jersey+team, ball, rim) for event derivation")
 args = ap.parse_args()
 
 if args.dump_frame:
@@ -118,22 +120,71 @@ def wood_frac_at(hsv, x0, x1, y0, y1):
 # ---------------------------------------------------------------- jersey OCR
 jersey_votes = defaultdict(lambda: defaultdict(float))  # tid -> {number: weight}
 jersey_reads = defaultdict(int)                          # tid -> read count
-jersey_final = {}                                        # tid -> number str
 roster = set(x.strip() for x in args.roster.split(",")) if args.roster else None
 
 
-def jersey_label(tid):
-    if tid in jersey_final:
-        return "#" + jersey_final[tid]
-    votes = jersey_votes[tid]
-    if votes:
-        num, w = max(votes.items(), key=lambda kv: kv[1])
-        # lock in only with real evidence: wrong-number labels are worse
-        # for a coaching staff than an anonymous P-id
-        if w >= 2.0 and jersey_reads[tid] >= 3:
-            jersey_final[tid] = num
-            return "#" + num
-    return f"P{tid}"
+# team classification by jersey color, voted per track like the numbers
+team_votes = defaultdict(lambda: defaultdict(int))       # tid -> {team: votes}
+
+
+def classify_team(frame, tid, x1, y1, x2, y2):
+    """Vote red-vs-white team from the torso band's dominant color."""
+    bh = y2 - y1
+    crop = frame[max(0, int(y1 + bh * 0.18)):min(H, int(y1 + bh * 0.5)),
+                 max(0, int(x1 + (x2 - x1) * 0.25)):min(W, int(x2 - (x2 - x1) * 0.25))]
+    if crop.size == 0:
+        return
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    red = float((((h <= 12) | (h >= 172)) & (s > 110) & (v > 70)).mean())
+    white = float(((s < 60) & (v > 150)).mean())
+    if red > 0.25 and red > white:
+        team_votes[tid]["A"] += 1
+    elif white > 0.3:
+        team_votes[tid]["B"] += 1
+
+
+def team_of(tid):
+    v = team_votes.get(tid)
+    if not v:
+        return None
+    team, n = max(v.items(), key=lambda kv: kv[1])
+    return team if n >= 3 else None
+
+
+last_seen = {}                                           # tid -> last frame index
+
+
+def jersey_claim(tid):
+    """This track's best-supported number, or None without real evidence."""
+    votes = jersey_votes.get(tid)
+    if not votes:
+        return None
+    num, w = max(votes.items(), key=lambda kv: kv[1])
+    if w >= 2.0 and jersey_reads[tid] >= 3:
+        return num, w
+    return None
+
+
+def assign_jerseys(frame_i, max_stale=None):
+    """Resolve number->track EVERY frame. A number belongs to one live track:
+    when ByteTrack swaps ids across an occlusion (labels riding the wrong
+    body), whichever track keeps reading the number wins it back; the loser
+    reverts to its P-id instead of stealing the label. Returns {tid: num}."""
+    if max_stale is None:
+        max_stale = int(2.5 * FPS)
+    claims = defaultdict(list)   # number -> [(weight, tid)]
+    for tid in list(jersey_votes.keys()):
+        if frame_i - last_seen.get(tid, -9999) > max_stale:
+            continue             # stale track: no live claim
+        c = jersey_claim(tid)
+        if c:
+            claims[c[0]].append((c[1], tid))
+    out = {}
+    for num, lst in claims.items():
+        lst.sort(reverse=True)
+        out[lst[0][1]] = num     # strongest evidence wins
+    return out
 
 
 def ocr_jersey(frame, tid, x1, y1, x2, y2):
@@ -295,6 +346,7 @@ if not args.no_basket:
 
 # ---------------------------------------------------------------- main loop
 uniq = set(); frame_i = 0
+export = [] if args.export_json else None
 while True:
     ok, frame = cap.read()
     if not ok:
@@ -325,14 +377,28 @@ while True:
                 uniq.add(tid)
             boxes.append((tid, x1, y1, x2, y2, bh))
 
-    # jersey OCR (skip once a track's number is locked in)
+    for tid, x1, y1, x2, y2, bh in boxes:
+        if tid >= 0:
+            last_seen[tid] = frame_i
+
+    # jersey OCR — resolved tracks keep getting sampled at a slower cadence
+    # so a swapped id is caught and corrected instead of trusted forever
     if reader is not None:
         for tid, x1, y1, x2, y2, bh in boxes:
-            if tid < 0 or tid in jersey_final:
+            if tid < 0 or bh < args.ocr_min_h * H:
                 continue
-            if bh < args.ocr_min_h * H or (frame_i + tid) % args.ocr_every:
+            cadence = args.ocr_every * (3 if jersey_claim(tid) else 1)
+            if (frame_i + tid) % cadence:
                 continue
             ocr_jersey(raw, tid, x1, y1, x2, y2)
+
+    assigned = assign_jerseys(frame_i)      # {tid: number} — one owner per number
+
+    # team color vote (cheap, every other frame)
+    if frame_i % 2 == 0:
+        for tid, x1, y1, x2, y2, bh in boxes:
+            if tid >= 0:
+                classify_team(raw, tid, x1, y1, x2, y2)
 
     # ---- ball: predict -> detect -> gate ----
     pred = None
@@ -391,8 +457,9 @@ while True:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, YELLOW, 2, cv2.LINE_AA)
 
     for tid, x1, y1, x2, y2, bh in boxes:
+        lbl = "#" + assigned[tid] if tid in assigned else f"P{tid}"
         cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), GREEN, 2)
-        cv2.putText(frame, jersey_label(tid), (int(x1), int(y1) - 6),
+        cv2.putText(frame, lbl, (int(x1), int(y1) - 6),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, GREEN, 2, cv2.LINE_AA)
 
     if ball_pt is not None:
@@ -409,18 +476,41 @@ while True:
                     (int(ball_pt[0]) + 14, int(ball_pt[1]) - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, ORANGE, 2, cv2.LINE_AA)
 
-    ids = sum(1 for t, *_ in boxes if t in jersey_final)
+    ids = sum(1 for t, *_ in boxes if t in assigned)
     cv2.rectangle(frame, (0, 0), (560, 34), (0, 0, 0), -1)
     bs = "yes" if ball_real else ("held" if ball_pt is not None else "--")
     rs = "yes" if rim_hit else "--"
     cv2.putText(frame, f"players: {len(boxes)} (#id {ids})  ball: {bs}  basket: {rs}",
                 (8, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.7, YELLOW, 2, cv2.LINE_AA)
 
+    if export is not None:
+        export.append({
+            "f": frame_i, "t": round(frame_i / FPS, 3),
+            "players": [{"tid": tid, "j": assigned.get(tid),
+                         "box": [round(x1), round(y1), round(x2), round(y2)]}
+                        for tid, x1, y1, x2, y2, bh in boxes if tid >= 0],
+            "ball": ([round(ball_pt[0]), round(ball_pt[1]), 1 if ball_real else 0]
+                     if ball_pt is not None else None),
+            "rim": ([int(rim_hit[0]), int(rim_hit[1]), int(rim_tmpl.shape[1]), int(rim_tmpl.shape[0])]
+                    if rim_hit is not None else None),
+        })
+
     writer.write(frame)
     frame_i += 1
     if frame_i % 60 == 0:
-        nums = {t: n for t, n in jersey_final.items()}
-        print(f"  frame {frame_i}/{N}  players={len(boxes)} ball={bs} basket={rs} jerseys={nums}", flush=True)
+        print(f"  frame {frame_i}/{N}  players={len(boxes)} ball={bs} basket={rs} "
+              f"assigned={assigned}", flush=True)
 
 writer.release(); cap.release()
-print(f"done. {frame_i} frames, {len(uniq)} track ids, jerseys resolved: {jersey_final}", flush=True)
+final_assign = assign_jerseys(frame_i, max_stale=10 ** 9)
+if export is not None:
+    import json
+    meta = {
+        "fps": FPS, "width": W, "height": H, "frames": frame_i,
+        "jerseys": final_assign,                                   # tid -> number (final winners)
+        "teams": {str(t): team_of(t) for t in uniq if team_of(t)}, # tid -> A(dark)/B(light)
+    }
+    with open(args.export_json, "w") as fh:
+        json.dump({"meta": meta, "frames": export}, fh)
+    print(f"tracking data -> {args.export_json}", flush=True)
+print(f"done. {frame_i} frames, {len(uniq)} track ids, jerseys: {final_assign}", flush=True)

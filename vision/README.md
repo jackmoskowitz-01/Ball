@@ -17,7 +17,7 @@ first run. Everything runs locally after that — no cloud, gym WiFi optional.
 ## Run a game
 
     python track_game.py GAME.mp4 GAME_tracked.mp4 \
-        --roster "5,13,19,33,58,30,36,44,60,77"
+        --roster "5,13,19,33,58,15,36,44,60,77"
 
 Pass both teams' jersey numbers in `--roster` — OCR reads that don't match
 a rostered number are discarded, which is what keeps low-resolution
@@ -64,14 +64,36 @@ Template tracking handles camera pans from there.
 | `--ball-hold` | 24 | frames to extrapolate an occluded ball |
 | `--no-basket` | — | skip basket tracking |
 
+## Derive coded events (Layer B — game-state)
+
+Turn the tracking into an actual coded timeline:
+
+    python track_game.py GAME.mp4 out.mp4 --rim ... --roster ... --export-json tracking.json
+    python derive_events.py tracking.json GAME.mp4 events.json \
+        --team-a WSH --team-b UTAH --clock "9:41" --quarter 2
+
+`events.json` contains possessions, passes, shot attempts, **makes verified
+by scoreboard OCR** (the broadcast scorebug is ground truth), and rebounds —
+each with video timestamps, player jersey + team (auto-classified by jersey
+color), and a confidence score. The demo page (`demo/index.html`) loads this
+file and builds its timeline from it: every clip seeks to the real footage
+moment.
+
+Heuristics are documented at the top of `derive_events.py` — argue with
+them there.
+
 ## How it works
 
 - **Players** — YOLO11x + ByteTrack (`tracker_stable.yaml`, large buffer so
   ids survive occlusions) + court filter: a detection only counts if the
   floor under its feet is hardwood-colored.
-- **Jerseys** — every few frames each unresolved track's torso band is
-  OCR'd (digits only, 3× upscale); reads accumulate confidence-weighted
-  votes per track id; a number is locked in after ≥2 consistent reads.
+- **Jerseys** — torso bands are OCR'd every few frames (digits only, 4×
+  upscale); reads accumulate confidence-weighted votes per track id.
+  Numbers are assigned dynamically each frame with a one-owner rule: a
+  number belongs to the live track with the strongest evidence, so when
+  ByteTrack swaps ids across an occlusion the label snaps back to the
+  right body instead of riding the wrong one. Resolved tracks keep being
+  sampled (slower cadence) so drift gets caught.
 - **Ball** — full-frame low-conf detection at high resolution, fused with a
   constant-velocity model: candidates are gated by distance to the
   predicted position (shot arcs pass the gate, crowd false-positives

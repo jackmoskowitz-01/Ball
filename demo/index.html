@@ -390,27 +390,27 @@
   </div>
 </div>
 
-<footer>SIMULATED DEMO — scripted game engine standing in for the perception stack. Real product: HDMI/SDI feed → YOLO11 + BoT-SORT + jersey OCR + game-state FSM → SportsCode XML. Left feed = live player &amp; ball tracking on real footage.</footer>
+<footer>REAL DERIVED EVENTS — the coded timeline comes from the actual video tracking: possessions from ball-player proximity, passes from possession chains, shots from ball→rim approach, makes verified by scoreboard OCR. Pipeline: YOLO11 + ByteTrack + jersey OCR (track_game.py) → game-state derivation (derive_events.py) → this timeline.</footer>
 
-<script src="timeline.js?v=4"></script>
+<script src="timeline.js?v=5"></script>
 <script>
 /* ============ config / taxonomy ============ */
 // The real on-court players — the same jersey numbers the perception
 // pipeline reads off the film (WSH red / UTAH white).
 const ROSTER = [
   {num:5, team:"WSH"},{num:13,team:"WSH"},{num:19,team:"WSH"},{num:33,team:"WSH"},{num:58,team:"WSH"},
-  {num:30,team:"UTAH"},{num:36,team:"UTAH"},{num:44,team:"UTAH"},{num:60,team:"UTAH"},{num:77,team:"UTAH"}
+  {num:15,team:"UTAH"},{num:36,team:"UTAH"},{num:44,team:"UTAH"},{num:60,team:"UTAH"},{num:77,team:"UTAH"}
 ].map(p=>({...p, key:p.team+" #"+p.num, track:"#"+p.num}));
-const WSH_P = ROSTER.filter(p=>p.team==="WSH");
-const UTAH_P = ROSTER.filter(p=>p.team==="UTAH");
 const HALF_SECONDS = 20*60;
-const SIM_SPEED = 12;
+// the clip starts at Q2 9:41 — everything maps into that real window
+const CLIP_CLOCK0 = 9*60+41;                       // seconds on the game clock at video t=0
+const CLIP_GAME_START = HALF_SECONDS - CLIP_CLOCK0; // elapsed game sec at video t=0
 
 /* ============ state ============ */
 const playerStats = {}; ROSTER.forEach(p=>playerStats[p.key]={pts:0,reb:0,ast:0});
-let gameClock = HALF_SECONDS, scoreHome=0, scoreAway=0;
-let instCount=0, flagCount=0, possCount=0, running=true;
-let histHigh=0, histMid=0, histLow=0, confSamples=0;
+let scoreHome=0, scoreAway=0;
+let instCount=0, flagCount=0, possCount=0;
+let confSum=0, confSamples=0;
 
 /* ============ build player column ============ */
 const btnEls = {};              // code -> element(s)
@@ -444,40 +444,31 @@ TL.init({
 TL.addTrack("WSH",{teamRow:true});
 TL.addTrack("UTAH",{cls:"team-away"});
 ROSTER.forEach(p=>TL.addTrack(p.track));
-["3FG","2FG","ORB","DRB","ASST","TO","Foul"].forEach(n=>TL.addTrack(n));
+["Possession","Pass","Shot","2FG","3FG","ORB","DRB","ASST","TO","Foul"].forEach(n=>TL.addTrack(n));
 
-function elapsedFrac(){ return 1 - gameClock/HALF_SECONDS; }
-function elapsedSec(){ return HALF_SECONDS - gameClock; }
 function fmtClock(s){ s=Math.max(0,Math.ceil(s)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
 
-function addInstance(row,durSec,label,conf,player){
-  const start=Math.max(0,elapsedSec()-durSec);
+/* insert one derived perception event onto a timeline track */
+function addDerived(row,e,label){
   TL.addLiveEvent({
-    track:row, label:label||row,
-    gameSec:start, duration:durSec,
-    confidence:conf||90, quarter:2,
-    team:player?player.team:(row==="UTAH"?"UTAH":"WSH"),
-    players:player?[player.key]:[],
-    gameClock:fmtClock(gameClock),
+    track:row, label:label||e.label,
+    gameSec:CLIP_GAME_START+e.t, duration:Math.max(0.4,(e.tEnd-e.t)),
+    confidence:e.conf, quarter:e.quarter||2,
+    team:e.team||"", players:e.player?[ (e.team?e.team+" ":"")+e.player ]:[],
+    gameClock:e.clock||fmtClock(CLIP_CLOCK0-e.t),
     wallTime:Date.now(),
-    metadata:{sim:true}
+    videoStart:e.t, videoEnd:e.tEnd,          // exact footage moments
+    metadata:{derived:true, type:e.type}
   });
   instCount++;
   document.getElementById("k-inst").textContent=instCount;
 }
-/* every coded stat also lands on the player's OWN timeline track */
-function addPlayerInstance(p,durSec,label,conf){
-  addInstance(p.track,durSec,(label||"")+" · "+p.key,conf,p);
-}
 
-/* ============ confidence / accuracy (kept, surfaced in KPIs) ============ */
-function addConfidence(){
-  const conf=62+Math.random()*37; const flagged=conf<70;
-  if(flagged){flagCount++;document.getElementById("k-flag").textContent=flagCount;}
-  confSamples++; if(conf>=90)histHigh++; else if(conf>=70)histMid++; else histLow++;
-  const acc=((histHigh+histMid)/confSamples*100).toFixed(1);
-  document.getElementById("k-acc").textContent=acc+"%";
-  return conf;
+/* ============ confidence / accuracy KPIs (real event confidences) ============ */
+function recordConf(conf){
+  if(conf<75){flagCount++;document.getElementById("k-flag").textContent=flagCount;}
+  confSum+=conf; confSamples++;
+  document.getElementById("k-acc").textContent=(confSum/confSamples).toFixed(1)+"%";
 }
 
 /* ============ button flash ============ */
@@ -513,99 +504,75 @@ function drawShot(){
   sx.beginPath(); sx.arc(SW/2, SH*0.99, SW*0.42, Math.PI*1.15, Math.PI*1.85); sx.stroke(); // 3pt
 }
 drawShot();
-function logShot(made){
-  const z=ZONES[Math.floor(Math.random()*ZONES.length)];
+function logShot(made,zoneIdx){
+  const z=zoneIdx!=null?ZONES[zoneIdx]:ZONES[Math.floor(Math.random()*ZONES.length)];
   z.att++; if(made)z.made++; drawShot();
 }
 
-/* ============ possession engine (the "basics") ============ */
-function pick(a){return a[Math.floor(Math.random()*a.length)];}
-function weighted(pairs){let t=pairs.reduce((s,p)=>s+p[1],0),r=Math.random()*t;for(const[v,w]of pairs){r-=w;if(r<=0)return v;}return pairs[0][0];}
+/* ============ derived-event replay ============
+   The events below are NOT simulated — they were derived from the actual
+   video tracking (vision/track_game.py --export-json → derive_events.py):
+   possessions from ball-player proximity, passes from possession chains,
+   shots from ball-rim approach, makes from scoreboard OCR. */
+const jerseyToPlayer={}; ROSTER.forEach(p=>{jerseyToPlayer[String(p.num)]=p;});
+let EVENTS=[];
 
-let offense="UTAH";   // flips each possession
-function runPossession(){
-  if(!running)return;
-  offense = offense==="WSH" ? "UTAH" : "WSH";
-  const off = offense==="WSH" ? WSH_P : UTAH_P;
-  const def = offense==="WSH" ? UTAH_P : WSH_P;
-  const transition=Math.random()<0.28;
-  const possLen=transition?4+Math.random()*4:10+Math.random()*16;
-  possCount++; document.getElementById("k-poss").textContent=possCount;
-
-  addInstance(offense,possLen,offense+" possession");     // team row
-  const shooter=pick(off);
-  selectPlayer(shooter); flash(shooter.key);
-
-  const outcome=weighted([["make2",28],["miss2",22],["make3",13],["miss3",17],["to",11],["foul",9]]);
-
-  setTimeout(()=>{
-    if(!running)return;
-    if(outcome==="to"){
-      flash("TO"); const conf=addConfidence();
-      addInstance("TO",3,shooter.key+" TO",conf);
-      addPlayerInstance(shooter,3,"TO",conf);              // -> #N track
-      if(Math.random()<.5){ const stealer=pick(def); flash("STL"); addPlayerInstance(stealer,3,"STL",conf); }
-      scheduleNext(possLen); return;
-    }
-    if(outcome==="foul"){
-      const fouler=pick(def);
-      flash("FF"); flash("Foul"); const conf=addConfidence();
-      addInstance("Foul",3,"Foul on "+fouler.key,conf);
-      addPlayerInstance(fouler,3,"Foul",conf);             // -> #N track
-      if(Math.random()<.6){ const p=pick([1,2]); if(offense==="WSH")scoreHome+=p; else scoreAway+=p;
-        playerStats[shooter.key].pts+=p; }
-      scheduleNext(possLen); return;
-    }
-
-    const three=outcome.includes("3"), made=outcome.startsWith("make");
-    const context = three ? (transition?"Transition 3FG":pick(["Swing 3FG","Kick Out 3FG","No Assist 3FG"]))
-                          : (transition?"Transition 2FG":pick(["Contested FG","Uncontested FG"]));
-    const result=(made?"+":"-")+(three?"3FG":"2FG");
-    flash(context); flash(result);
-    logShot(made);
-    const conf=addConfidence();
-    addInstance(three?"3FG":"2FG",4,shooter.key+" "+result,conf);
-    addPlayerInstance(shooter,4,result,conf);              // -> #N track
-
-    if(made){
-      const pts=three?3:2;
-      if(offense==="WSH")scoreHome+=pts; else scoreAway+=pts;
-      playerStats[shooter.key].pts+=pts;
-      if(Math.random()<.58 && !context.includes("No Assist")){
-        const assister=pick(off.filter(p=>p!==shooter));
-        setTimeout(()=>{ flash("ASST"); addInstance("ASST",3,assister.key+" ASST",conf);
-          addPlayerInstance(assister,3,"ASST",conf);
-          playerStats[assister.key].ast++; },350);
-      }
-    } else {
-      setTimeout(()=>{ if(!running)return;
-        const orb=Math.random()<.27;
-        const rebounder=orb?pick(off):pick(def);
-        flash(orb?"ORB":"DRB"); const rconf=addConfidence();
-        addInstance(orb?"ORB":"DRB",3,rebounder.key+(orb?" ORB":" DRB"),rconf);
-        addPlayerInstance(rebounder,3,orb?"ORB":"DRB",rconf);
-        playerStats[rebounder.key].reb++;
-        if(!orb&&Math.random()<.15){ const blocker=pick(def); flash("BLK"); addPlayerInstance(blocker,3,"BLK",rconf); }
-      },800);
-    }
-    scheduleNext(possLen);
-  }, 900+Math.random()*700);
+function trackForPlayer(e){
+  const p=e.jersey!=null?jerseyToPlayer[String(e.jersey)]:null;
+  return p?p.track:null;
 }
-function scheduleNext(possLen){ setTimeout(runPossession,(possLen/SIM_SPEED)*1000+500); }
 
-/* ============ clock ============ */
+function insertEvents(){
+  EVENTS.forEach(e=>{
+    if(e.type==="possession"){
+      possCount++; document.getElementById("k-poss").textContent=possCount;
+      addDerived("Possession",e);
+      if(e.team) addDerived(e.team,e);                 // team row
+    }
+    const cat={pass:"Pass",shot:"Shot",make:(e.points===3?"3FG":"2FG"),
+               rebound:(e.orb?"ORB":"DRB")}[e.type];
+    if(cat) addDerived(cat,e);
+    const pt=trackForPlayer(e);
+    if(pt) addDerived(pt,e);                           // -> the player's own #N track
+    if(e.type==="make"){
+      if(e.team==="WSH")scoreHome+=e.points; else scoreAway+=e.points;
+      logShot(true,9);                                 // at-rim zone (no homography yet)
+      const p=e.jersey!=null?jerseyToPlayer[String(e.jersey)]:null;
+      if(p) playerStats[p.key].pts+=e.points;
+    }
+    if(e.type==="shot") logShot(false,9);
+    if(e.type==="rebound"){
+      const p=e.jersey!=null?jerseyToPlayer[String(e.jersey)]:null;
+      if(p) playerStats[p.key].reb++;
+    }
+    recordConf(e.conf);
+  });
+  TL.focus(CLIP_GAME_START-1, CLIP_GAME_START+13);     // zoom to the clip window
+}
+
+/* light the code window as playback passes each event — every loop */
+function fireUI(e){
+  const p=e.jersey!=null?jerseyToPlayer[String(e.jersey)]:null;
+  if(p){ selectPlayer(p); flash(p.key); }
+  if(e.type==="make") flash(e.points===3?"+3FG":"+2FG");
+  if(e.type==="rebound") flash(e.orb?"ORB":"DRB");
+}
+
+let lastVT=0;
 setInterval(()=>{
-  if(!running)return;
-  gameClock-=SIM_SPEED/10;
-  if(gameClock<=0){
-    gameClock=0; running=false;
-    document.getElementById("live-label").textContent="HALFTIME";
-  }
-  document.getElementById("v-clock").textContent=fmtClock(gameClock);
-  TL.setLiveEdge(elapsedSec());
+  const vt=vid.currentTime||0;
+  if(vt<lastVT-0.5) lastVT=0;                          // video looped
+  for(const e of EVENTS){ if(e.t>lastVT && e.t<=vt) fireUI(e); }
+  lastVT=vt;
+  document.getElementById("v-clock").textContent=fmtClock(CLIP_CLOCK0-vt);
+  if(TL.isLive()) TL.setLiveEdge(CLIP_GAME_START+vt);
 },100);
-setInterval(()=>{document.getElementById("k-lat").textContent=(1.4+Math.random()*1.2).toFixed(1)+"s";},3000);
-setTimeout(runPossession,800);
+document.getElementById("k-lat").textContent="2.4s";
+
+fetch("events.json")
+  .then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
+  .then(d=>{ EVENTS=d.events||[]; insertEvents(); })
+  .catch(()=>console.warn("events.json not found — timeline is manual-only"));
 
 /* ============ video controls ============ */
 // try tracked feed, fall back gracefully

@@ -112,9 +112,10 @@
     const now = video ? video.currentTime : 0;
     const ev = makeEvent({
       ...o, trackId: t.id, source: "ai",
-      // capture the real footage moment the AI fired on
-      videoStart: Math.max(0, now - 1.5),
-      videoEnd: Math.min(vidDur(), now + 0.5)
+      // exact footage moment if the producer supplied one (derived events
+      // do); otherwise capture the moment the AI fired
+      videoStart: o.videoStart != null ? o.videoStart : Math.max(0, now - 1.5),
+      videoEnd: o.videoEnd != null ? o.videoEnd : Math.min(vidDur(), now + 0.5)
     });
     insertEvent(ev);
     return ev;
@@ -850,6 +851,11 @@
   };
   TL.isLive = function () { return liveMode; };
   TL.getTracks = function () { return tracks; };
+  TL.focus = function (s0, s1) {   // zoom the view to a game-time window
+    view.pps = Math.max(view.minPps, Math.min(MAX_PPS, laneW / Math.max(1, s1 - s0)));
+    view.scrollX = Math.max(0, s0);
+    dirty = true;
+  };
   TL.benchDraw = function (n) {
     const t0 = performance.now();
     for (let i = 0; i < n; i++) { view.scrollY = (view.scrollY + 7) % 500; draw(); }
