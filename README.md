@@ -1,28 +1,51 @@
 # AUTOCODE
 
-Autonomous live game coding for college basketball. An edge box takes the same clean feed a human coder watches and produces a SportsCode-quality timeline in the team's **exact custom taxonomy** — no analyst clicking, live, at the buzzer.
+Live AI game coding for college basketball. Plug in a video feed, get a SportsCode timeline — no human clicking.
 
-Hudl built for everyone. We build for one team at a time.
+---
 
-## The core bet
+## What it does
 
-The moat is not the detector — it's the **Taxonomy Compiler**: a no-code tool that imports a team's SportsCode code window XML and maps their buttons ("Kick Out 3FG", "Ward") onto canonical events + rules. That's what makes *custom* scale.
+- Takes a 1080p30 HDMI/SDI feed (same one the human coder watches)
+- Outputs `GameID_SportsCode.xml` that drops directly into SportsCode
+- Works offline, on edge hardware, with <3s latency
 
-## Repo layout (planned)
+## What it codes (MVP)
+
+| Category | Tags |
+|---|---|
+| Possession | Start/end, Transition vs Half-Court |
+| Shot | Make/Miss, 8 shot types, shot chart x/y |
+| Shooter | Top 8 rotation players by jersey OCR |
+| Stats | ORB, DRB, ASST, BLK, STL, TO, Foul |
+
+## The key idea
+
+Every team has their own button names — "Kick Out 3FG", "Ward", "Swing". The **Taxonomy Compiler** imports their existing SportsCode XML and maps those buttons to canonical events. Custom doesn't mean rebuilding from scratch for each team.
+
+## Hardware
+
+M3 Max MacBook Pro or Mac Mini + Blackmagic capture card. Setup under 15 min.
+
+## Repo
 
 ```
-docs/           Spec, build plan, decisions
-perception/     Layer A — detection, tracking, jersey OCR, court homography (30fps)
-gamestate/      Layer B — deterministic possession FSM, shot/score clock OCR (15hz)
-actions/        Layer C — action recognition transformer (shot/pass, contested, pass type)
-timeline/       Layer D — canonical events + taxonomy rules → SportsCode XML export
-compiler/       Taxonomy Compiler — code window import, canonical mapping, JSON rules
+docs/           Spec and build plan
+perception/     Detection, tracking, jersey OCR, court homography
+gamestate/      Possession FSM, shot clock OCR, score tracking
+actions/        Shot/pass classifier, contested detection
+timeline/       SportsCode XML exporter
+compiler/       Taxonomy Compiler UI
 ```
 
 ## Docs
 
-- [Full MVP spec](docs/SPEC.md) — problem, architecture, data strategy, 12-week plan, GTM
+- [Full spec](docs/SPEC.md)
 
-## MVP v0.1 scope
+## Numbers
 
-Single 1080p30 feed in → SportsCode XML + chaptered MP4 out. Possession, transition vs half-court, make/miss, shooter ID (8-man rotation), 8 shot types, ORB/DRB/ASST/BLK/STL/TO/foul, shot chart x,y. Edge-only, offline-capable, <3s latency.
+- Target accuracy: >90% on top 10 codes
+- Shooter ID: >85%
+- Timeline start drift: <0.5s vs human (80% of instances)
+- Confidence threshold: flag yellow below 70% for post-game review
+- Price: $1,500/mo per basketball team (in-season)

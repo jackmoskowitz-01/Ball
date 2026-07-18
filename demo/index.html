@@ -3,551 +3,612 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AUTOCODE — Live Demo</title>
+<title>BALL — AUTOCODE Live Demo</title>
 <style>
   :root {
-    --bg: #0b0f14;
-    --panel: #121821;
-    --panel2: #0e141c;
-    --border: #1f2937;
-    --text: #e5e9f0;
-    --dim: #8b96a5;
-    --accent: #4f9cf9;
-    --green: #34d399;
-    --red: #f87171;
-    --yellow: #fbbf24;
-    --home: #4f9cf9;
-    --away: #f87171;
+    --desk: #6f7378;          /* desktop grey behind the windows */
+    --win: #d9dbde;           /* window chrome */
+    --navy: #16324f;          /* player buttons */
+    --navy2: #1d3f63;
+    --navy-hi: #2e6fb0;       /* highlighted player */
+    --grey-btn: #e9eaec;
+    --grey-btn-b: #c7cace;
+    --green: #6ea832;
+    --red: #c1332b;
+    --wood: #e3b877;
+    --wood2: #d9a862;
+    --line: #23303c;
+    --text: #1c2530;
+    --dim: #6b7684;
+    --toolbar: #cfd2d6;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    background: var(--bg);
+    background: radial-gradient(circle at 50% 30%, #7c8087, #5c6066 80%);
     color: var(--text);
-    font-family: -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    font-family: -apple-system, "SF Pro Text", "Segoe UI", Helvetica, sans-serif;
+    min-height: 100vh;
+    padding: 14px;
   }
   .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; }
 
-  header {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    padding: 10px 18px;
-    background: var(--panel);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .logo { font-weight: 800; letter-spacing: 2px; font-size: 15px; }
-  .logo span { color: var(--accent); }
-  .live {
-    display: flex; align-items: center; gap: 7px;
-    font-size: 12px; font-weight: 600; color: var(--red);
-    text-transform: uppercase; letter-spacing: 1px;
-  }
-  .live-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: var(--red);
-    animation: pulse 1.2s infinite;
-  }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
-  .scorebug {
+  /* ===== top brand strip ===== */
+  .brand {
     display: flex; align-items: center; gap: 14px;
-    margin-left: auto;
-    font-size: 14px; font-weight: 700;
+    color: #eef1f4; margin: 2px 4px 12px;
   }
-  .scorebug .team-home { color: var(--home); }
-  .scorebug .team-away { color: var(--away); }
-  .clock { font-size: 15px; color: var(--text); min-width: 60px; text-align: center; }
-  .header-stat { font-size: 11px; color: var(--dim); text-align: right; line-height: 1.4; }
-  .header-stat b { color: var(--text); font-size: 13px; }
-  .header-stat.flagged b { color: var(--yellow); }
+  .brand .logo { font-weight: 800; letter-spacing: 3px; font-size: 16px; }
+  .brand .logo span { color: #4f9cf9; }
+  .brand .live {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    color: #ff5b5b;
+  }
+  .brand .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff5b5b; animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .brand .spacer { flex: 1; }
+  .brand .kpi { font-size: 11px; color: #c7ccd3; text-align: right; line-height: 1.3; }
+  .brand .kpi b { color: #fff; font-size: 14px; }
+  .brand .kpi b.green { color: #46d68a; }
+  .brand .kpi b.yellow { color: #f5c043; }
 
-  main {
-    flex: 1;
+  /* ===== two-window layout ===== */
+  .stage {
     display: grid;
-    grid-template-columns: 1fr 360px;
-    gap: 10px;
-    padding: 10px;
-    min-height: 0;
-  }
-  .left-col { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
-
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    display: flex; flex-direction: column;
-    min-height: 0;
-  }
-  .panel-title {
-    padding: 8px 12px;
-    font-size: 11px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 1.2px;
-    color: var(--dim);
-    border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 8px;
-    flex-shrink: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
+    gap: 16px;
+    max-width: 1720px; margin: 0 auto;
+    align-items: start;
   }
 
-  .feed-panel { flex: 1.4; }
-  .feed-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 10px; min-height: 0; }
-  canvas#court { max-width: 100%; max-height: 100%; border-radius: 6px; }
-
-  .conf-panel { flex: 1; }
-  .conf-body { flex: 1; overflow-y: auto; padding: 6px 8px; }
-  .conf-row {
-    display: flex; align-items: center; gap: 8px;
-    padding: 5px 8px; margin-bottom: 4px;
-    background: var(--panel2);
-    border-radius: 5px;
-    border-left: 3px solid var(--green);
-    font-size: 12px;
-    animation: slidein .25s ease;
+  /* mac window shell */
+  .window {
+    background: var(--win);
+    border-radius: 10px;
+    box-shadow: 0 22px 60px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.3);
+    overflow: hidden;
   }
-  @keyframes slidein { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-  .conf-row.flag { border-left-color: var(--yellow); }
-  .conf-row .time { color: var(--dim); font-size: 11px; min-width: 40px; }
-  .conf-row .label { flex: 1; font-weight: 600; }
-  .conf-row .pct { font-weight: 700; font-size: 11px; color: var(--green); }
-  .conf-row.flag .pct { color: var(--yellow); }
-  .conf-row .flag-badge {
-    font-size: 9px; font-weight: 700; color: #000;
-    background: var(--yellow); border-radius: 3px; padding: 1px 5px;
-  }
-
-  .code-body { flex: 1; overflow-y: auto; padding: 10px; }
-  .btn-group { margin-bottom: 12px; }
-  .btn-group-label {
-    font-size: 10px; font-weight: 700; color: var(--dim);
-    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;
-  }
-  .btn-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
-  .btn-grid.wide { grid-template-columns: repeat(2, 1fr); }
-  .btn-grid.three { grid-template-columns: repeat(3, 1fr); }
-  .code-btn {
-    padding: 7px 4px;
-    background: var(--panel2);
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    font-size: 11px; font-weight: 600;
-    text-align: center;
-    color: var(--dim);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    transition: all .12s;
-  }
-  .code-btn.fire {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-    box-shadow: 0 0 14px rgba(79,156,249,.55);
-    transform: scale(1.05);
-  }
-  .code-btn.fire-green { background: var(--green); border-color: var(--green); color: #06281c; box-shadow: 0 0 14px rgba(52,211,153,.55); transform: scale(1.05); }
-  .code-btn.fire-red { background: var(--red); border-color: var(--red); color: #fff; box-shadow: 0 0 14px rgba(248,113,113,.55); transform: scale(1.05); }
-
-  .timeline-panel {
-    flex-shrink: 0;
-    height: 245px;
-    margin: 0 10px 10px;
-  }
-  .tl-body { flex: 1; display: flex; min-height: 0; overflow-y: auto; }
-  .tl-labels { flex-shrink: 0; width: 110px; border-right: 1px solid var(--border); }
-  .tl-label {
-    height: 20px; line-height: 20px;
-    font-size: 10px; font-weight: 600; color: var(--dim);
-    padding: 0 8px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    border-bottom: 1px solid rgba(31,41,55,.5);
-  }
-  .tl-tracks { flex: 1; position: relative; overflow: hidden; }
-  .tl-row {
-    height: 20px;
-    border-bottom: 1px solid rgba(31,41,55,.5);
+  .titlebar {
+    height: 30px; display: flex; align-items: center; gap: 8px;
+    padding: 0 12px;
+    background: linear-gradient(#e7e9ec, #d3d6da);
+    border-bottom: 1px solid #b9bdc2;
     position: relative;
   }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.r { background: #ff5f57; } .dot.y { background: #febc2e; } .dot.g { background: #28c840; }
+  .titlebar .t-title {
+    position: absolute; left: 0; right: 0; text-align: center;
+    font-size: 12px; font-weight: 600; color: #4a525c; pointer-events: none;
+  }
+
+  /* ===== LEFT: video window ===== */
+  .video-wrap { background: #000; position: relative; aspect-ratio: 16 / 9; }
+  .video-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .clockbug {
+    position: absolute; top: 10px; right: 12px;
+    background: rgba(0,0,0,.62); color: #fff; font-weight: 700;
+    padding: 4px 10px; border-radius: 5px; font-size: 13px;
+  }
+  .clockbug small { color: #9fb3c8; font-weight: 600; }
+  .vid-controls {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 4px;
+    background: rgba(20,22,26,.82); border-radius: 10px; padding: 8px 12px;
+    backdrop-filter: blur(4px);
+  }
+  .vc-btn {
+    width: 34px; height: 30px; border: none; background: transparent; color: #e8ebef;
+    font-size: 15px; cursor: pointer; border-radius: 6px;
+  }
+  .vc-btn:hover { background: rgba(255,255,255,.12); }
+
+  /* timeline sub-window under the video */
+  .tl-window { margin-top: 14px; }
+  .tl-toolbar {
+    display: flex; align-items: center; gap: 22px;
+    padding: 8px 14px; background: #d3d6da; border-bottom: 1px solid #b9bdc2;
+  }
+  .tl-tool { text-align: center; color: #48505a; font-size: 10px; }
+  .tl-tool .ico { font-size: 15px; display: block; margin-bottom: 1px; }
+  .tl-body { background: #1b1b1d; max-height: 250px; overflow-y: auto; }
+  #tl-rows { position: relative; }
+  .tl-ruler {
+    display: flex; height: 18px; align-items: center;
+    padding-left: 132px; color: #7f868d; font-size: 9px; gap: 46px;
+    border-bottom: 1px solid #2a2b2e; position: sticky; top: 0; background: #202124; z-index: 2;
+  }
+  .tl-track { display: flex; height: 22px; border-bottom: 1px solid #2a2b2e; }
+  .tl-name {
+    width: 132px; flex-shrink: 0; display: flex; align-items: center;
+    padding: 0 10px; font-size: 11px; font-weight: 600; color: #d6d9dd;
+    border-right: 1px solid #2a2b2e;
+  }
+  .tl-track.team-home .tl-name, .tl-track.team-home .tl-lane { background: #7d1f1f; }
+  .tl-track.team-away .tl-name { background: #111; }
+  .tl-lane { flex: 1; position: relative; }
   .tl-inst {
-    position: absolute; top: 3px; height: 14px;
-    border-radius: 3px;
-    min-width: 5px;
-    opacity: .95;
-    animation: instpop .3s ease;
+    position: absolute; top: 5px; height: 12px; width: 3px;
+    background: #e7e7e7; border-radius: 1px;
   }
-  @keyframes instpop { from { transform: scaleX(.3); opacity: 0; } to { transform: none; opacity: .95; } }
-  .playhead {
-    position: absolute; top: 0; bottom: 0; width: 1px;
-    background: var(--red);
-    z-index: 5;
+  .tl-track.team-home .tl-inst { background: #ffdede; }
+  .tl-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff3b30; z-index: 3; }
+
+  /* ===== RIGHT: code window ===== */
+  .code-toolbar {
+    display: flex; align-items: center; gap: 20px;
+    padding: 7px 16px; background: var(--toolbar); border-bottom: 1px solid #b9bdc2;
+    font-size: 9.5px; color: #555b63;
   }
-  .tl-count { color: var(--accent); margin-left: auto; font-weight: 700; }
+  .code-toolbar .grp { display: flex; align-items: center; gap: 12px; }
+  .code-toolbar .tb { text-align: center; }
+  .code-toolbar .tb .ico {
+    display: block; font-size: 13px; margin-bottom: 1px; color: #3e444b;
+  }
+  .code-toolbar .sep { width: 1px; align-self: stretch; background: #b3b7bc; }
+  .code-toolbar .grow { flex: 1; }
+  .code-strip { height: 26px; background: #b9bcc0; border-bottom: 1px solid #a7abb0; }
+
+  .code-body { background: #cfd2d6; padding: 12px; }
+  .code-grid {
+    display: grid;
+    grid-template-columns: 118px repeat(6, 1fr);
+    gap: 7px;
+  }
+  /* player column spans all rows on the left */
+  .player-col {
+    grid-column: 1; grid-row: 1 / span 8;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .pbtn {
+    background: var(--navy); color: #eef2f6; border: none; border-radius: 5px;
+    font-size: 12px; font-weight: 600; padding: 9px 6px; cursor: pointer;
+    flex: 1; min-height: 30px; transition: background .12s, box-shadow .12s;
+  }
+  .pbtn.active { background: var(--navy-hi); box-shadow: inset 0 0 0 2px #7fc0ff; color: #fff; }
+  .pbtn.fire { background: var(--navy-hi); box-shadow: 0 0 16px rgba(46,111,176,.9); color:#fff; }
+
+  /* generic action buttons */
+  .cbtn {
+    border: 1px solid var(--grey-btn-b); border-radius: 5px;
+    background: var(--grey-btn); color: #2b333c;
+    font-size: 12px; font-weight: 600; padding: 12px 4px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    min-height: 44px; transition: transform .1s, box-shadow .1s, background .1s;
+  }
+  .cbtn.navy { background: var(--navy); color: #eef2f6; border-color: #0f2436; }
+  .cbtn.green { background: var(--green); color: #fff; border-color: #557f26; }
+  .cbtn.red { background: var(--red); color: #fff; border-color: #932620; }
+  .cbtn.foul { grid-column: 7; grid-row: 1 / span 3; font-size: 15px; }
+  .cbtn.tiny { font-size: 12px; min-height: 34px; padding: 8px 2px; }
+  .cbtn.fire { transform: scale(1.06); box-shadow: 0 0 18px rgba(255,255,255,.55), 0 0 6px rgba(0,0,0,.3); filter: brightness(1.12); }
+
+  /* photo box */
+  .photo {
+    grid-column: 2; grid-row: 1 / span 3;
+    background: linear-gradient(#20262e, #2f3946);
+    border-radius: 6px; overflow: hidden; position: relative;
+    display: flex; align-items: flex-end; justify-content: center;
+    min-height: 130px;
+  }
+  .photo .avatar { width: 100%; height: 100%;
+    background:
+      radial-gradient(circle at 50% 34%, #8494a5 0 15%, transparent 16%),
+      radial-gradient(ellipse 34% 24% at 50% 88%, #8494a5 0 100%, transparent 101%),
+      linear-gradient(#242b34, #39434f);
+  }
+  .photo .pname {
+    position: absolute; top: 6px; left: 8px; color: #eaf0f6; font-weight: 700; font-size: 13px;
+    text-shadow: 0 1px 3px rgba(0,0,0,.7);
+  }
+  .photo .pnum {
+    position: absolute; top: 6px; right: 8px; color: #7fc0ff; font-weight: 800; font-size: 15px;
+  }
+
+  /* shot chart occupies lower area */
+  .shot {
+    grid-column: 2 / span 6; grid-row: 6 / span 3;
+    background: var(--wood);
+    border: 1px solid #b98b45; border-radius: 4px;
+    position: relative; min-height: 250px; overflow: hidden;
+  }
+  canvas#shot-c { width: 100%; height: 100%; display: block; }
+
   footer {
-    padding: 5px 18px; font-size: 10px; color: var(--dim);
-    border-top: 1px solid var(--border); background: var(--panel);
-    flex-shrink: 0;
+    max-width: 1720px; margin: 14px auto 0; padding: 8px 6px;
+    font-size: 10px; color: #d5d9de; text-align: center;
   }
+
+  /* halftime overlay */
+  #ht { display: none; position: fixed; inset: 0; background: rgba(20,24,28,.85); z-index: 200; align-items: center; justify-content: center; }
+  #ht.show { display: flex; }
+  .ht-card { background: #f2f3f5; border-radius: 14px; padding: 30px 44px; text-align: center; min-width: 380px; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+  .ht-card h2 { letter-spacing: 3px; font-size: 20px; margin-bottom: 4px; color:#222; }
+  .ht-card .s { font-size: 34px; font-weight: 900; margin: 10px 0; }
+  .ht-card .s .h { color: var(--red); } .ht-card .s .a { color: var(--navy); } .ht-card .s .x { color:#aaa; margin:0 10px; }
+  .ht-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin: 18px 0 24px; }
+  .ht-grid .c { font-size: 11px; color: #6b7684; }
+  .ht-grid .c b { display: block; font-size: 22px; color: #222; }
+  .ht-grid .c b.green { color: #3f9d4f; } .ht-grid .c b.yellow { color: #d69a1c; }
+  .xbtn { padding: 12px 28px; background: var(--green); color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:800; cursor:pointer; }
+  .xbtn:hover { filter: brightness(1.08); }
+  .xbtn.sm { padding: 6px 14px; font-size: 12px; }
+
+  @media (max-width: 1080px) { .stage { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 
-<header>
-  <div class="logo">AUTO<span>CODE</span></div>
-  <div class="live"><div class="live-dot"></div>AI Coding Live</div>
-  <div class="scorebug mono">
-    <span class="team-home">HOME <span id="score-home">0</span></span>
-    <span class="clock" id="clock">20:00</span>
-    <span class="team-away"><span id="score-away">0</span> OPP</span>
-  </div>
-  <div class="header-stat"><b id="inst-count">0</b><br>instances</div>
-  <div class="header-stat flagged"><b id="flag-count">0</b><br>flagged for review</div>
-  <div class="header-stat"><b id="latency">1.8s</b><br>avg latency</div>
-</header>
-
-<main>
-  <div class="left-col">
-    <div class="panel feed-panel">
-      <div class="panel-title">Live Feed — Perception Layer (tracking overlay)</div>
-      <div class="feed-body"><canvas id="court" width="940" height="500"></canvas></div>
+<div id="ht">
+  <div class="ht-card">
+    <h2>HALFTIME</h2>
+    <div class="s"><span class="h" id="ht-h">0</span><span class="x">—</span><span class="a" id="ht-a">0</span></div>
+    <div class="ht-grid">
+      <div class="c"><b class="green" id="ht-acc">—</b>AI Accuracy</div>
+      <div class="c"><b id="ht-inst">—</b>Instances</div>
+      <div class="c"><b class="yellow" id="ht-flag">—</b>Flagged</div>
     </div>
-    <div class="panel conf-panel">
-      <div class="panel-title">AI Decisions — confidence per instance (yellow = post-game review queue)</div>
-      <div class="conf-body" id="conf-body"></div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <div class="panel-title">Code Window — buttons fire as the AI "clicks"</div>
-    <div class="code-body">
-      <div class="btn-group">
-        <div class="btn-group-label">Players</div>
-        <div class="btn-grid" id="grp-players"></div>
-      </div>
-      <div class="btn-group">
-        <div class="btn-group-label">Shot Context</div>
-        <div class="btn-grid wide" id="grp-context"></div>
-      </div>
-      <div class="btn-group">
-        <div class="btn-group-label">Result</div>
-        <div class="btn-grid" id="grp-result"></div>
-      </div>
-      <div class="btn-group">
-        <div class="btn-group-label">Stats</div>
-        <div class="btn-grid" id="grp-stats"></div>
-      </div>
-      <div class="btn-group">
-        <div class="btn-group-label">Game State</div>
-        <div class="btn-grid three" id="grp-state"></div>
-      </div>
-    </div>
-  </div>
-</main>
-
-<div class="panel timeline-panel">
-  <div class="panel-title">SportsCode Timeline — building live <span class="tl-count mono" id="tl-count">0 instances</span></div>
-  <div class="tl-body">
-    <div class="tl-labels" id="tl-labels"></div>
-    <div class="tl-tracks" id="tl-tracks"><div class="playhead" id="playhead"></div></div>
+    <button class="xbtn" onclick="exportXML()">⬇ Export SportsCode XML</button>
   </div>
 </div>
 
-<footer>SIMULATED DEMO — scripted game engine standing in for the perception stack. Real product: HDMI/SDI feed in → YOLOv8 + BoT-SORT + jersey OCR + game-state FSM → this exact output, exported as SportsCode XML.</footer>
+<div class="brand">
+  <div class="logo">BA<span>LL</span></div>
+  <div class="live"><span class="live-dot"></span><span id="live-label">AUTOCODE Live</span></div>
+  <div class="spacer"></div>
+  <div class="kpi"><b id="k-poss">0</b><br>possessions</div>
+  <div class="kpi"><b id="k-inst">0</b><br>instances</div>
+  <div class="kpi"><b class="yellow" id="k-flag">0</b><br>flagged</div>
+  <div class="kpi"><b class="green" id="k-acc">—</b><br>accuracy</div>
+  <div class="kpi"><b id="k-lat">1.8s</b><br>latency</div>
+  <button class="xbtn sm" onclick="exportXML()">⬇ Export XML</button>
+</div>
+
+<div class="stage">
+  <!-- ============ LEFT: VIDEO + TIMELINE ============ -->
+  <div class="left-col">
+    <div class="window">
+      <div class="titlebar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="t-title">WSH vs UTAH — Live Feed</span>
+      </div>
+      <div class="video-wrap">
+        <video id="vid" autoplay muted loop playsinline></video>
+        <div class="clockbug mono"><span id="v-clock">20:00</span> <small>2ND</small></div>
+        <div class="vid-controls">
+          <button class="vc-btn" title="Start"      onclick="vseek(0)">⏮</button>
+          <button class="vc-btn" title="Back"       onclick="vskip(-5)">⏪</button>
+          <button class="vc-btn" id="playpause" title="Play/Pause" onclick="vtoggle()">⏸</button>
+          <button class="vc-btn" title="Forward"    onclick="vskip(5)">⏩</button>
+          <button class="vc-btn" title="End"        onclick="vseek(9e9)">⏭</button>
+          <button class="vc-btn" title="Settings">⚙</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="window tl-window">
+      <div class="titlebar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="t-title">SportsCode Timeline — building live</span>
+      </div>
+      <div class="tl-toolbar">
+        <div class="tl-tool"><span class="ico">▶</span>Movie</div>
+        <div class="tl-tool"><span class="ico">✂</span>Edit</div>
+        <div class="tl-tool"><span class="ico">▤</span>Note</div>
+        <div class="tl-tool"><span class="ico">⋮⋮</span>Sync</div>
+        <div class="tl-tool"><span class="ico">⇥</span>Align</div>
+        <div style="flex:1"></div>
+        <div class="tl-tool mono" id="tl-count" style="color:#3a6ea5;font-weight:700;font-size:11px">0 instances</div>
+      </div>
+      <div class="tl-body">
+        <div class="tl-ruler" id="tl-ruler"></div>
+        <div id="tl-rows"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RIGHT: CODE WINDOW ============ -->
+  <div class="window">
+    <div class="titlebar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="t-title" id="cw-title">HDL vs CLF — Live Code</span>
+    </div>
+    <div class="code-toolbar">
+      <div class="grp">
+        <div class="tb"><span class="ico">🎬</span></div>
+        <div class="tb"><span class="ico">✋</span></div>
+        <div class="tb"><span class="ico">▦</span></div>
+        <div class="tb"><span class="ico">📊</span></div>
+        <div class="tb"><span class="ico">✏️</span></div>
+      </div>
+      <div style="text-align:center;color:#5a616a;font-size:9px">Code Mode</div>
+      <div class="sep"></div>
+      <div class="grp"><div class="tb"><span class="ico">🅒</span>Code</div><div class="tb"><span class="ico">🏷</span>Label</div></div>
+      <div class="sep"></div>
+      <div class="grp"><div class="tb"><span class="ico">ⓘ</span>Deactivate</div><div class="tb"><span class="ico">✕</span>Clear</div><div class="tb"><span class="ico">⟳</span>Reset</div></div>
+      <div class="grow"></div>
+      <div class="grp"><div class="tb"><span class="ico">ⓘ</span>Inspector</div><div class="tb">100%<br>Opacity</div><div class="tb"><span class="ico">⚙</span>Settings</div></div>
+    </div>
+    <div class="code-strip"></div>
+
+    <div class="code-body">
+      <div class="code-grid">
+        <!-- player column: full height -->
+        <div class="player-col" id="player-col" style="grid-row:1/span 8"></div>
+
+        <!-- photo -->
+        <div class="photo">
+          <span class="pname" id="p-name">Ward</span>
+          <span class="pnum mono" id="p-num">#12</span>
+          <div class="avatar"></div>
+        </div>
+
+        <!-- shot context grid : rows 1-4, cols 3-6 ; Foul big red right -->
+        <div class="cbtn" data-code="Transition 3FG" style="grid-column:3/5;grid-row:1">Transition 3FG</div>
+        <div class="cbtn" data-code="Transition 2FG" style="grid-column:5/7;grid-row:1">Transition 2FG</div>
+        <div class="cbtn foul red" data-code="Foul">Foul</div>
+
+        <div class="cbtn" data-code="Swing 3FG"     style="grid-column:3/5;grid-row:2">Swing 3FG</div>
+        <div class="cbtn" data-code="Contested FG"  style="grid-column:5/7;grid-row:2">Contested FG</div>
+
+        <div class="cbtn" data-code="No Assist 3FG" style="grid-column:3/5;grid-row:3">No Assist 3FG</div>
+        <div class="cbtn" data-code="Uncontested FG" style="grid-column:5/7;grid-row:3">Uncontested FG</div>
+
+        <div class="cbtn" data-code="Kick Out 3FG"  style="grid-column:3/5;grid-row:4">Kick Out 3FG</div>
+        <div class="cbtn" data-code="Shot Blocked"  style="grid-column:5/7;grid-row:4">Shot Blocked</div>
+
+        <!-- number row : row 5 -->
+        <div class="cbtn tiny" data-code="-3" style="grid-column:2;grid-row:5">-3</div>
+        <div class="cbtn tiny" data-code="-2" style="grid-column:3;grid-row:5">-2</div>
+        <div class="cbtn tiny" data-code="-1" style="grid-column:4;grid-row:5">-1</div>
+        <div class="cbtn tiny" data-code="0"  style="grid-column:5;grid-row:5">0</div>
+        <div class="cbtn tiny" data-code="1"  style="grid-column:6;grid-row:5">1</div>
+        <div class="cbtn tiny navy" data-code="+2" style="grid-column:7;grid-row:5">+2</div>
+
+        <!-- stat rows : rows 6-7 -->
+        <div class="cbtn green tiny" data-code="+2FG" style="grid-column:2;grid-row:6">+2FG</div>
+        <div class="cbtn green tiny" data-code="+3FG" style="grid-column:3;grid-row:6">+3FG</div>
+        <div class="cbtn navy tiny"  data-code="ORB"  style="grid-column:4;grid-row:6">ORB</div>
+        <div class="cbtn navy tiny"  data-code="ASST" style="grid-column:5;grid-row:6">ASST</div>
+        <div class="cbtn navy tiny"  data-code="BLK"  style="grid-column:6;grid-row:6">BLK</div>
+        <div class="cbtn navy tiny"  data-code="FF"   style="grid-column:7;grid-row:6">FF</div>
+
+        <div class="cbtn red tiny"  data-code="-2FG" style="grid-column:2;grid-row:7">-2FG</div>
+        <div class="cbtn red tiny"  data-code="-3FG" style="grid-column:3;grid-row:7">-3FG</div>
+        <div class="cbtn navy tiny" data-code="DRB"  style="grid-column:4;grid-row:7">DRB</div>
+        <div class="cbtn navy tiny" data-code="TO"   style="grid-column:5;grid-row:7">TO</div>
+        <div class="cbtn navy tiny" data-code="STL"  style="grid-column:6;grid-row:7">STL</div>
+        <div class="cbtn navy tiny" data-code="FA"   style="grid-column:7;grid-row:7">FA</div>
+
+        <!-- shot chart : row 8, full width beside player col -->
+        <div class="shot" style="grid-column:2/8;grid-row:8"><canvas id="shot-c" width="720" height="300"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>SIMULATED DEMO — scripted game engine standing in for the perception stack. Real product: HDMI/SDI feed → YOLO11 + BoT-SORT + jersey OCR + game-state FSM → SportsCode XML. Left feed = live player &amp; ball tracking on real footage.</footer>
 
 <script>
-// ---------------- config ----------------
-const ROSTER = ["Jonah", "Sario", "Jennings", "Carter", "Ward", "Hill", "Okafor", "Reyes"];
-const CONTEXTS = ["Transition 3FG", "Swing 3FG", "No Assist 3FG", "Kick Out 3FG", "Contested FG", "Uncontested FG"];
-const RESULTS = ["+2FG", "-2FG", "+3FG", "-3FG"];
-const STATS = ["ORB", "DRB", "ASST", "BLK", "STL", "TO", "FF", "FA"];
-const STATES = ["Possession", "Transition", "Half-Court"];
-const TL_ROWS = ["Possession", "Transition", ...ROSTER.slice(0, 5), "3FG", "2FG", "ORB", "DRB", "ASST", "TO", "Foul"];
-const HALF_SECONDS = 20 * 60;
-const SIM_SPEED = 12; // game-seconds per real second
+/* ============ config / taxonomy (unchanged "basics") ============ */
+const ROSTER = [
+  {name:"Jonah",num:3},{name:"Sario",num:5},{name:"Jennings",num:8},{name:"Carter",num:10},
+  {name:"Vick",num:12},{name:"Buglewicz",num:21},{name:"McCarthy",num:23},{name:"Arnold",num:24},
+  {name:"Ward",num:12},{name:"Lang",num:30},{name:"Mabry",num:32},{name:"Galvan",num:34},
+  {name:"Hernandez",num:41},{name:"May",num:44},{name:"Porter",num:55}
+];
+const STARTERS = ROSTER.slice(0,5);
+const HALF_SECONDS = 20*60;
+const SIM_SPEED = 12;
 
-// ---------------- build UI ----------------
-const btnEls = {};
-function buildButtons(groupId, names) {
-  const grp = document.getElementById(groupId);
-  names.forEach(n => {
-    const b = document.createElement("div");
-    b.className = "code-btn";
-    b.textContent = n;
-    grp.appendChild(b);
-    btnEls[n] = b;
-  });
-}
-buildButtons("grp-players", ROSTER);
-buildButtons("grp-context", CONTEXTS);
-buildButtons("grp-result", RESULTS);
-buildButtons("grp-stats", STATS);
-buildButtons("grp-state", STATES);
+/* ============ state ============ */
+const gameInstances = [];
+const playerStats = {}; ROSTER.forEach(p=>playerStats[p.name]={pts:0,reb:0,ast:0});
+let gameClock = HALF_SECONDS, scoreHome=0, scoreAway=0;
+let instCount=0, flagCount=0, possCount=0, running=true;
+let histHigh=0, histMid=0, histLow=0, confSamples=0;
 
-const rowEls = {};
-const labelsEl = document.getElementById("tl-labels");
-const tracksEl = document.getElementById("tl-tracks");
-TL_ROWS.forEach(r => {
-  const l = document.createElement("div");
-  l.className = "tl-label";
-  l.textContent = r;
-  labelsEl.appendChild(l);
-  const row = document.createElement("div");
-  row.className = "tl-row";
-  tracksEl.appendChild(row);
-  rowEls[r] = row;
+/* ============ build player column ============ */
+const btnEls = {};              // code -> element(s)
+const pcol = document.getElementById("player-col");
+STARTERS.concat(ROSTER.slice(5,15)).slice(0,13).forEach((p,i)=>{
+  const b=document.createElement("button");
+  b.className="pbtn"+(p.name==="Ward"?" active":"");
+  b.textContent=p.name; b.dataset.code=p.name;
+  b.onclick=()=>selectPlayer(p);
+  pcol.appendChild(b); btnEls[p.name]=b;
 });
-
-// ---------------- game state ----------------
-let gameClock = HALF_SECONDS;
-let scoreHome = 0, scoreAway = 0;
-let instCount = 0, flagCount = 0;
-let running = true;
-
-function fmtClock(s) {
-  s = Math.max(0, Math.ceil(s));
-  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
-}
-function elapsedFrac() { return 1 - gameClock / HALF_SECONDS; }
-
-function flash(name, cls) {
-  const b = btnEls[name];
-  if (!b) return;
-  const c = cls || "fire";
-  b.classList.add(c);
-  setTimeout(() => b.classList.remove(c), 650);
+function selectPlayer(p){
+  document.querySelectorAll(".pbtn").forEach(e=>e.classList.remove("active"));
+  if(btnEls[p.name]) btnEls[p.name].classList.add("active");
+  document.getElementById("p-name").textContent=p.name;
+  document.getElementById("p-num").textContent="#"+p.num;
 }
 
-const ROW_COLORS = {
-  "Possession": "#334155", "Transition": "#7c3aed",
-  "3FG": "#4f9cf9", "2FG": "#38bdf8",
-  "ORB": "#f59e0b", "DRB": "#a3a3a3",
-  "ASST": "#34d399", "TO": "#f87171", "Foul": "#fb923c"
-};
-function addInstance(row, durSec) {
-  const el = rowEls[row];
-  if (!el) return;
-  const inst = document.createElement("div");
-  inst.className = "tl-inst";
-  const startFrac = Math.max(0, elapsedFrac() - durSec / HALF_SECONDS);
-  inst.style.left = (startFrac * 100) + "%";
-  inst.style.width = Math.max(0.5, durSec / HALF_SECONDS * 100) + "%";
-  inst.style.background = ROW_COLORS[row] || "#4f9cf9";
-  el.appendChild(inst);
+/* register action buttons */
+document.querySelectorAll(".cbtn").forEach(el=>{ btnEls[el.dataset.code]=el; });
+
+/* ============ timeline ============ */
+const TL_ROWS = [
+  {name:"HDL",cls:"team-home"},{name:"CLF",cls:"team-away"},
+  ...STARTERS.map(p=>({name:p.name,cls:""})),
+  {name:"3FG",cls:""},{name:"2FG",cls:""},{name:"ORB",cls:""},{name:"DRB",cls:""},
+  {name:"ASST",cls:""},{name:"TO",cls:""},{name:"Foul",cls:""}
+];
+const rowEls={};
+const rowsC=document.getElementById("tl-rows");
+TL_ROWS.forEach(r=>{
+  const t=document.createElement("div"); t.className="tl-track "+r.cls;
+  const n=document.createElement("div"); n.className="tl-name"; n.textContent=r.name;
+  const l=document.createElement("div"); l.className="tl-lane";
+  t.appendChild(n); t.appendChild(l); rowsC.appendChild(t); rowEls[r.name]=l;
+});
+// ruler + playhead
+const ruler=document.getElementById("tl-ruler");
+["00:00","04:00","08:00","12:00","16:00","20:00"].forEach(t=>{const s=document.createElement("span");s.textContent=t;ruler.appendChild(s);});
+const playhead=document.createElement("div"); playhead.className="tl-playhead"; playhead.style.left="132px"; rowsC.appendChild(playhead);
+
+function elapsedFrac(){ return 1 - gameClock/HALF_SECONDS; }
+function elapsedSec(){ return HALF_SECONDS - gameClock; }
+function fmtClock(s){ s=Math.max(0,Math.ceil(s)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
+
+function addInstance(row,durSec,label,conf){
+  const lane=rowEls[row];
+  if(lane){
+    const inst=document.createElement("div"); inst.className="tl-inst";
+    inst.style.left=(Math.max(0,elapsedFrac()-durSec/HALF_SECONDS)*100)+"%";
+    lane.appendChild(inst);
+  }
   instCount++;
-  document.getElementById("inst-count").textContent = instCount;
-  document.getElementById("tl-count").textContent = instCount + " instances";
+  document.getElementById("k-inst").textContent=instCount;
+  document.getElementById("tl-count").textContent=instCount+" instances";
+  gameInstances.push({row,label:label||row,startSec:Math.max(0,elapsedSec()-durSec),endSec:elapsedSec(),conf:conf||90});
 }
 
-function addConfidence(label) {
-  const conf = 62 + Math.random() * 37;
-  const flagged = conf < 70;
-  if (flagged) {
-    flagCount++;
-    document.getElementById("flag-count").textContent = flagCount;
-  }
-  const body = document.getElementById("conf-body");
-  const row = document.createElement("div");
-  row.className = "conf-row" + (flagged ? " flag" : "");
-  row.innerHTML =
-    '<span class="time mono">' + fmtClock(gameClock) + '</span>' +
-    '<span class="label">' + label + '</span>' +
-    (flagged ? '<span class="flag-badge">REVIEW</span>' : '') +
-    '<span class="pct mono">' + conf.toFixed(0) + '%</span>';
-  body.prepend(row);
-  while (body.children.length > 40) body.removeChild(body.lastChild);
+/* ============ confidence / accuracy (kept, surfaced in KPIs) ============ */
+function addConfidence(){
+  const conf=62+Math.random()*37; const flagged=conf<70;
+  if(flagged){flagCount++;document.getElementById("k-flag").textContent=flagCount;}
+  confSamples++; if(conf>=90)histHigh++; else if(conf>=70)histMid++; else histLow++;
+  const acc=((histHigh+histMid)/confSamples*100).toFixed(1);
+  document.getElementById("k-acc").textContent=acc+"%";
+  return conf;
 }
 
-// ---------------- court sim ----------------
-const cv = document.getElementById("court");
-const ctx = cv.getContext("2d");
-const W = cv.width, H = cv.height;
-const players = [];
-for (let i = 0; i < 10; i++) {
-  players.push({
-    team: i < 5 ? 0 : 1,
-    idx: i % 5,
-    x: Math.random() * W, y: Math.random() * H,
-    tx: Math.random() * W, ty: Math.random() * H
+/* ============ button flash ============ */
+function flash(code,extra){
+  const b=btnEls[code]; if(!b)return;
+  b.classList.add("fire"); if(extra)b.classList.add(extra);
+  setTimeout(()=>{b.classList.remove("fire"); if(extra)b.classList.remove(extra);},600);
+}
+
+/* ============ shot chart (zone hit/attempt like reference) ============ */
+const sc=document.getElementById("shot-c"), sx=sc.getContext("2d");
+const SW=sc.width, SH=sc.height;
+// zones: {x,y,w,h,made,att}
+const ZONES=[
+  {x:.02,y:.02,w:.16,h:.55},{x:.18,y:.02,w:.16,h:.30},{x:.34,y:.02,w:.16,h:.30},
+  {x:.50,y:.02,w:.16,h:.30},{x:.66,y:.02,w:.16,h:.30},{x:.82,y:.02,w:.16,h:.55},
+  {x:.18,y:.32,w:.24,h:.34},{x:.42,y:.32,w:.16,h:.34},{x:.58,y:.32,w:.24,h:.34},
+  {x:.30,y:.66,w:.40,h:.32}
+].map(z=>({...z,made:Math.floor(Math.random()*2),att:1+Math.floor(Math.random()*3)}));
+function drawShot(){
+  sx.fillStyle="#e3b877"; sx.fillRect(0,0,SW,SH);
+  sx.strokeStyle="#20140a"; sx.lineWidth=2;
+  ZONES.forEach(z=>{
+    const X=z.x*SW,Y=z.y*SH,Wd=z.w*SW,Hd=z.h*SH;
+    sx.strokeRect(X,Y,Wd,Hd);
+    sx.fillStyle="#20140a"; sx.font="bold 15px -apple-system,sans-serif"; sx.textAlign="center";
+    sx.fillText(z.made+"/"+z.att, X+Wd/2, Y+Hd/2+5);
   });
+  // hoop + paint + arc (bottom center = baseline)
+  sx.strokeStyle="#20140a"; sx.lineWidth=3;
+  sx.strokeRect(SW*0.38, SH*0.66, SW*0.24, SH*0.34);   // paint
+  sx.beginPath(); sx.arc(SW/2, SH*0.66, SW*0.19, Math.PI, 0); sx.stroke(); // ft circle-ish
+  sx.beginPath(); sx.arc(SW/2, SH*0.99, SW*0.42, Math.PI*1.15, Math.PI*1.85); sx.stroke(); // 3pt
 }
-const ball = { x: W / 2, y: H / 2, tx: W / 2, ty: H / 2, holder: 0, shooting: false };
-let offenseTeam = 0; // 0 = home attacks right hoop
-
-function retarget() {
-  const attackX = offenseTeam === 0 ? W * 0.72 : W * 0.28;
-  const defendX = attackX;
-  players.forEach(p => {
-    const base = p.team === offenseTeam ? attackX : defendX + (offenseTeam === 0 ? -40 : 40);
-    p.tx = base + (Math.random() - 0.5) * W * 0.42;
-    p.ty = H * 0.12 + Math.random() * H * 0.76;
-    p.tx = Math.max(20, Math.min(W - 20, p.tx));
-  });
-}
-retarget();
-setInterval(retarget, 2600);
-
-function shootBall(made) {
-  const hoopX = offenseTeam === 0 ? W - 34 : 34;
-  ball.shooting = true;
-  ball.tx = hoopX; ball.ty = H / 2;
-  setTimeout(() => {
-    ball.shooting = false;
-    if (!made) { ball.tx += (Math.random() - 0.5) * 120; ball.ty += (Math.random() - 0.5) * 120; }
-  }, 700);
+drawShot();
+function logShot(made){
+  const z=ZONES[Math.floor(Math.random()*ZONES.length)];
+  z.att++; if(made)z.made++; drawShot();
 }
 
-function drawCourt() {
-  ctx.fillStyle = "#17202b";
-  ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = "#2a3646";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(10, 10, W - 20, H - 20);
-  ctx.beginPath(); ctx.moveTo(W / 2, 10); ctx.lineTo(W / 2, H - 10); ctx.stroke();
-  ctx.beginPath(); ctx.arc(W / 2, H / 2, 55, 0, Math.PI * 2); ctx.stroke();
-  // arcs + hoops
-  [34, W - 34].forEach(hx => {
-    ctx.beginPath();
-    ctx.arc(hx, H / 2, 210, hx < W / 2 ? -Math.PI / 2 : Math.PI / 2, hx < W / 2 ? Math.PI / 2 : Math.PI * 1.5);
-    ctx.stroke();
-    ctx.beginPath(); ctx.arc(hx, H / 2, 8, 0, Math.PI * 2);
-    ctx.strokeStyle = "#e5734f"; ctx.stroke();
-    ctx.strokeStyle = "#2a3646";
-    // paint
-    const px = hx < W / 2 ? 10 : W - 130;
-    ctx.strokeRect(px, H / 2 - 70, 120, 140);
-  });
-}
+/* ============ possession engine (the "basics") ============ */
+function pick(a){return a[Math.floor(Math.random()*a.length)];}
+function weighted(pairs){let t=pairs.reduce((s,p)=>s+p[1],0),r=Math.random()*t;for(const[v,w]of pairs){r-=w;if(r<=0)return v;}return pairs[0][0];}
 
-function drawFrame() {
-  drawCourt();
-  players.forEach(p => {
-    const sp = 0.045;
-    p.x += (p.tx - p.x) * sp;
-    p.y += (p.ty - p.y) * sp;
-    // tracking box
-    ctx.strokeStyle = p.team === 0 ? "rgba(79,156,249,.5)" : "rgba(248,113,113,.5)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(p.x - 12, p.y - 16, 24, 32);
-    ctx.fillStyle = p.team === 0 ? "#4f9cf9" : "#f87171";
-    ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 9px ui-monospace, monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(p.team === 0 ? ROSTER[p.idx].slice(0, 3).toUpperCase() : "#" + (p.idx + 10), p.x, p.y - 20);
-  });
-  if (!ball.shooting) {
-    const holder = players.filter(p => p.team === offenseTeam)[ball.holder % 5];
-    ball.tx = holder.x + 12; ball.ty = holder.y;
-  }
-  ball.x += (ball.tx - ball.x) * (ball.shooting ? 0.18 : 0.12);
-  ball.y += (ball.ty - ball.y) * (ball.shooting ? 0.18 : 0.12);
-  ctx.fillStyle = "#f59e0b";
-  ctx.beginPath(); ctx.arc(ball.x, ball.y, 5, 0, Math.PI * 2); ctx.fill();
-  requestAnimationFrame(drawFrame);
-}
-drawFrame();
-setInterval(() => { ball.holder = Math.floor(Math.random() * 5); }, 1400);
+function runPossession(){
+  if(!running)return;
+  const isHome=Math.random()<0.5;
+  const transition=Math.random()<0.28;
+  const possLen=transition?4+Math.random()*4:10+Math.random()*16;
+  possCount++; document.getElementById("k-poss").textContent=possCount;
 
-// ---------------- event engine ----------------
-function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-function weighted(pairs) {
-  const total = pairs.reduce((s, p) => s + p[1], 0);
-  let r = Math.random() * total;
-  for (const [v, w] of pairs) { r -= w; if (r <= 0) return v; }
-  return pairs[0][0];
-}
+  const shooter=pick(STARTERS);
+  if(isHome){ selectPlayer(shooter); flash(shooter.name); }
+  flash(isHome?"HDL":"CLF");
 
-function runPossession() {
-  if (!running) return;
-  offenseTeam = offenseTeam === 0 ? 1 : 0;
-  const isHome = offenseTeam === 0;
-  const transition = Math.random() < 0.28;
-  const possLen = transition ? 4 + Math.random() * 4 : 10 + Math.random() * 16;
+  const outcome=weighted([["make2",28],["miss2",22],["make3",13],["miss3",17],["to",11],["foul",9]]);
 
-  flash("Possession");
-  flash(transition ? "Transition" : "Half-Court");
-  addInstance("Possession", possLen);
-  if (transition) addInstance("Transition", possLen);
+  setTimeout(()=>{
+    if(!running)return;
+    if(outcome==="to"){ flash("TO"); addInstance("TO",3); if(isHome)addInstance(shooter.name,3,shooter.name+" TO"); addConfidence(); if(isHome&&Math.random()<.5)flash("STL"); scheduleNext(possLen); return; }
+    if(outcome==="foul"){ flash(isHome?"FA":"FF"); flash("Foul"); addInstance("Foul",3); addConfidence(); if(Math.random()<.6){const p=pick([1,2]); if(isHome)scoreHome+=p; else scoreAway+=p;} updateScore(); scheduleNext(possLen); return; }
 
-  const outcome = weighted([
-    ["make2", 28], ["miss2", 22], ["make3", 13], ["miss3", 17], ["to", 11], ["foul", 9]
-  ]);
-  const shooter = pick(ROSTER.slice(0, 5));
-  const shooterRowOk = TL_ROWS.includes(shooter);
+    const three=outcome.includes("3"), made=outcome.startsWith("make");
+    const context = three ? (transition?"Transition 3FG":pick(["Swing 3FG","Kick Out 3FG","No Assist 3FG"]))
+                          : (transition?"Transition 2FG":pick(["Contested FG","Uncontested FG"]));
+    const result=(made?"+":"-")+(three?"3FG":"2FG");
+    flash(context); flash(result, made?"":""); flash(result);
+    logShot(made);
+    addInstance(three?"3FG":"2FG",4);
+    if(isHome) addInstance(shooter.name,4);
+    const conf=addConfidence();
 
-  setTimeout(() => {
-    if (!running) return;
-    if (outcome === "to") {
-      flash("TO", "fire-red");
-      addInstance("TO", 3);
-      addConfidence((isHome ? shooter : "OPP") + " — Turnover");
-      if (isHome && Math.random() < 0.5) { flash("STL", "fire-green"); }
-      return;
-    }
-    if (outcome === "foul") {
-      flash(isHome ? "FA" : "FF");
-      addInstance("Foul", 3);
-      addConfidence("Foul — " + (isHome ? "drawn by " + shooter : "on defense"));
-      if (Math.random() < 0.6) { const pts = pick([1, 2]); if (isHome) scoreHome += pts; else scoreAway += pts; }
-      return;
-    }
-    const three = outcome.includes("3");
-    const made = outcome.startsWith("make");
-    shootBall(made);
-    const context = three
-      ? (transition ? "Transition 3FG" : pick(["Swing 3FG", "Kick Out 3FG", "No Assist 3FG"]))
-      : pick(["Contested FG", "Uncontested FG"]);
-    const result = (made ? "+" : "-") + (three ? "3FG" : "2FG");
-
-    if (isHome) { flash(shooter); }
-    flash(context);
-    flash(result, made ? "fire-green" : "fire-red");
-    addInstance(three ? "3FG" : "2FG", 4);
-    if (isHome && shooterRowOk) addInstance(shooter, 4);
-    addConfidence((isHome ? shooter : "OPP") + " — " + context + " " + result);
-
-    if (made) {
-      if (isHome) scoreHome += three ? 3 : 2; else scoreAway += three ? 3 : 2;
-      if (Math.random() < 0.58 && !context.includes("No Assist")) {
-        setTimeout(() => { flash("ASST", "fire-green"); addInstance("ASST", 3); }, 350);
+    if(made){
+      const pts=three?3:2; if(isHome){scoreHome+=pts;playerStats[shooter.name].pts+=pts;} else scoreAway+=pts;
+      if(Math.random()<.58 && !context.includes("No Assist")){
+        setTimeout(()=>{ flash("ASST"); addInstance("ASST",3); },350);
       }
     } else {
-      setTimeout(() => {
-        if (!running) return;
-        const orb = Math.random() < 0.27;
-        flash(orb ? "ORB" : "DRB");
-        addInstance(orb ? "ORB" : "DRB", 3);
-        addConfidence((orb ? "Offensive" : "Defensive") + " rebound");
-        if (!orb && Math.random() < 0.15) flash("BLK", "fire-green");
-      }, 800);
+      setTimeout(()=>{ if(!running)return; const orb=Math.random()<.27; flash(orb?"ORB":"DRB"); addInstance(orb?"ORB":"DRB",3); addConfidence(); if(!orb&&Math.random()<.15)flash("BLK"); },800);
     }
-    document.getElementById("score-home").textContent = scoreHome;
-    document.getElementById("score-away").textContent = scoreAway;
-  }, 900 + Math.random() * 800);
-
-  const nextIn = (possLen / SIM_SPEED) * 1000 + 600;
-  setTimeout(runPossession, nextIn);
+    updateScore();
+    scheduleNext(possLen);
+  }, 900+Math.random()*700);
 }
+function scheduleNext(possLen){ setTimeout(runPossession,(possLen/SIM_SPEED)*1000+500); }
+function updateScore(){ /* score reflected via clock bug title only in this layout */ }
 
-// clock
-setInterval(() => {
-  if (!running) return;
-  gameClock -= SIM_SPEED / 10;
-  if (gameClock <= 0) {
-    gameClock = 0;
-    running = false;
-    document.querySelector(".live").innerHTML = "HALF — TIMELINE READY FOR EXPORT";
-    document.querySelector(".live").style.color = "var(--green)";
+/* ============ clock ============ */
+setInterval(()=>{
+  if(!running)return;
+  gameClock-=SIM_SPEED/10;
+  if(gameClock<=0){
+    gameClock=0; running=false;
+    document.getElementById("live-label").textContent="HALFTIME";
+    document.getElementById("ht-h").textContent=scoreHome;
+    document.getElementById("ht-a").textContent=scoreAway;
+    document.getElementById("ht-inst").textContent=instCount;
+    document.getElementById("ht-flag").textContent=flagCount;
+    document.getElementById("ht-acc").textContent=(confSamples?((histHigh+histMid)/confSamples*100).toFixed(1):"0")+"%";
+    document.getElementById("ht").classList.add("show");
   }
-  document.getElementById("clock").textContent = fmtClock(gameClock);
-  document.getElementById("playhead").style.left = (elapsedFrac() * 100) + "%";
-}, 100);
+  document.getElementById("v-clock").textContent=fmtClock(gameClock);
+  playhead.style.left=("calc(132px + "+(elapsedFrac()*100)+"% - "+(elapsedFrac()*132)+"px)");
+},100);
+setInterval(()=>{document.getElementById("k-lat").textContent=(1.4+Math.random()*1.2).toFixed(1)+"s";},3000);
+setTimeout(runPossession,800);
 
-// latency jitter for flavor
-setInterval(() => {
-  document.getElementById("latency").textContent = (1.4 + Math.random() * 1.2).toFixed(1) + "s";
-}, 3000);
+/* ============ video controls ============ */
+const vid=document.getElementById("vid");
+// try tracked feed, fall back gracefully
+vid.src="tracked.mp4";
+vid.addEventListener("error",()=>{ document.querySelector(".video-wrap").style.background="#11161c"; });
+function vtoggle(){ if(vid.paused){vid.play();document.getElementById("playpause").textContent="⏸";} else {vid.pause();document.getElementById("playpause").textContent="▶";} }
+function vseek(t){ vid.currentTime=Math.min(t,vid.duration||0); }
+function vskip(d){ vid.currentTime=Math.max(0,(vid.currentTime||0)+d); }
 
-setTimeout(runPossession, 800);
+/* ============ XML export (unchanged "basics") ============ */
+function exportXML(){
+  const gameId="GAME_"+new Date().toISOString().slice(0,10).replace(/-/g,"");
+  const rows=[...new Set(gameInstances.map(i=>i.row))];
+  let xml=`<?xml version="1.0" encoding="UTF-8"?>\n<file version="2">\n  <ALL_INSTANCES>\n`;
+  rows.forEach(row=>{
+    const insts=gameInstances.filter(i=>i.row===row); if(!insts.length)return;
+    xml+=`    <instance>\n      <ID>${row}</ID>\n`;
+    insts.forEach((inst,idx)=>{
+      xml+=`      <label>\n        <pos>${idx+1}</pos>\n        <time>${inst.startSec.toFixed(2)}</time>\n`+
+           `        <dur>${(inst.endSec-inst.startSec).toFixed(2)}</dur>\n        <end>${inst.endSec.toFixed(2)}</end>\n`+
+           `        <code>${inst.label}</code>\n        <conf>${inst.conf.toFixed(1)}</conf>\n      </label>\n`;
+    });
+    xml+=`    </instance>\n`;
+  });
+  xml+=`  </ALL_INSTANCES>\n</file>\n`;
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([xml],{type:"application/xml"}));
+  a.download=gameId+"_SportsCode.xml"; a.click(); URL.revokeObjectURL(a.href);
+}
 </script>
 </body>
 </html>

@@ -1,0 +1,9 @@
+# ByteTrack tuned for stable IDs: big buffer keeps a player's number through
+# occlusions / brief exits so it doesn't get reassigned.
+tracker_type: bytetrack
+track_high_thresh: 0.25
+track_low_thresh: 0.10
+new_track_thresh: 0.30
+track_buffer: 120
+match_thresh: 0.85
+fuse_score: True
