@@ -346,6 +346,66 @@ def main():
                                        "shooterTrackingId": b[2]},
                            "confidence": 0.35, "features": None})
 
+    # ---- pose features at shot/block keyframes ----
+    # yolo11n-pose gives wrists/elbows: the spec's release definition
+    # (wrist above elbow, daylight from ball) becomes trainable features
+    # in events.jsonl instead of nulls. COCO kpts: 7/8 = elbows, 9/10 = wrists.
+    pose_events = [e for e in events if e["type"] in ("shot", "block")]
+    if pose_events:
+        try:
+            pose_model = YOLO("yolo11n-pose.pt")
+            cap2 = cv2.VideoCapture(args.video)
+            for ev in pose_events:
+                kf = ev["keyFrame"]
+                who = ev["payload"].get("shooterTrackingId") if ev["type"] == "shot" \
+                    else ev["payload"].get("blockerTrackingId")
+                target = next((o for o in by_frame.get(kf, [])
+                               if o["cls"].startswith("player") and o["trackingId"] == who), None)
+                if target is None:
+                    continue
+                cap2.set(cv2.CAP_PROP_POS_FRAMES, kf)
+                ok2, fr2 = cap2.read()
+                if not ok2:
+                    continue
+                pres = pose_model.predict(fr2, conf=0.25, imgsz=960, verbose=False)[0]
+                if pres.keypoints is None or pres.boxes is None:
+                    continue
+                # pick the pose detection that best overlaps the participant's box
+                tx1, ty1 = target["x"], target["y"]
+                tx2, ty2 = tx1 + target["w"], ty1 + target["h"]
+                best_i, best_iou = -1, 0.0
+                for i, b in enumerate(pres.boxes):
+                    x1, y1, x2, y2 = map(float, b.xyxy[0])
+                    ix = max(0, min(tx2, x2) - max(tx1, x1))
+                    iy = max(0, min(ty2, y2) - max(ty1, y1))
+                    inter = ix * iy
+                    union = (tx2 - tx1) * (ty2 - ty1) + (x2 - x1) * (y2 - y1) - inter
+                    v = inter / union if union > 0 else 0
+                    if v > best_iou:
+                        best_iou, best_i = v, i
+                if best_i < 0 or best_iou < 0.3:
+                    continue
+                pts = pres.keypoints.xy[best_i]
+                lw, rw = pts[9], pts[10]
+                le, re_ = pts[7], pts[8]
+                # shooting arm = the higher wrist (smaller y); 0,0 = undetected
+                cands = [(w, e) for w, e in ((lw, le), (rw, re_))
+                         if float(w[0]) > 0 and float(w[1]) > 0]
+                if not cands:
+                    continue
+                wrist, elbow = min(cands, key=lambda we: float(we[0][1]))
+                feat = ev.get("features") or {}
+                feat["wrist_y"] = float(wrist[1])
+                feat["elbow_y"] = float(elbow[1]) if float(elbow[1]) > 0 else None
+                ball = next((o for o in by_frame.get(kf, []) if o["cls"] == "ball"), None)
+                if ball is not None:
+                    bx, by = ball["x"] + ball["w"] / 2, ball["y"] + ball["h"] / 2
+                    feat["ball_in_hand_dist"] = box_dist(bx, by, (tx1, ty1, tx2, ty2))
+                ev["features"] = feat
+            cap2.release()
+        except Exception as exc:  # pose is enrichment; never fail the labeling run
+            print(f"pose skipped: {exc}", file=sys.stderr)
+
     out = {"fps": fps, "width": W, "height": H, "frameCount": f + 1,
            "frames": frames_out, "events": sorted(events, key=lambda e: e["keyFrame"])}
     with open(args.out_json, "w") as fh:

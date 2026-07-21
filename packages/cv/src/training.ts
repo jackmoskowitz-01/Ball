@@ -71,18 +71,14 @@ async function runJob(jobId: string) {
     data: { datasetVersionId: dataset.id, log: `dataset v${dsVersion}: ${JSON.stringify(ds.classCounts)}\n` },
   });
 
-  const lastModel = await prisma.modelVersion.findFirst({ where: { type: 'student' }, orderBy: { version: 'desc' } });
-  const version = (lastModel?.version ?? 0) + 1;
-  const name = `student_v${version}`;
-
-  const result = await new Promise<{ weights: string; metrics: Record<string, number> }>(
-    (resolve, reject) => {
+  const trainOne = (type: 'student' | 'teacher', base: string, epochs: number, name: string) =>
+    new Promise<{ weights: string; metrics: Record<string, number> }>((resolve, reject) => {
       const p = spawn(pythonBin(), [
         path.join(PY_DIR, 'train.py'),
-        '--type', 'student',
+        '--type', type,
         '--data', ds.dataYaml,
-        '--weights', 'yolo11n.pt',
-        '--epochs', '20',
+        '--weights', base,
+        '--epochs', String(epochs),
         '--project', path.join(REPO_ROOT, 'data/weights'),
         '--name', name,
       ], { cwd: PY_DIR });
@@ -93,7 +89,7 @@ async function runJob(jobId: string) {
         // stream tail of training log into the job row so /queue can show it
         await prisma.trainingJob.update({
           where: { id: jobId },
-          data: { log: err.slice(-8000) },
+          data: { log: `[${name}]\n` + err.slice(-8000) },
         }).catch(() => {});
       });
       p.on('close', (code) => {
@@ -101,29 +97,49 @@ async function runJob(jobId: string) {
         const last = out.trim().split('\n').pop()!;
         resolve(JSON.parse(last));
       });
-    },
-  );
+    });
 
-  // events.jsonl regenerated above = the event-detector training set (step 5).
-  // Detector metrics decide promotion; event model training is logged for now.
-  const current = await getProductionModel('student');
-  const currentBall = current ? (JSON.parse(current.metrics).ball_map50 ?? 0) : 0;
-  const newBall = result.metrics.ball_map50 ?? 0;
-  const promote = !current || current.id === undefined || newBall > currentBall;
+  // promote by the metric that matters for that role: student = ball (the
+  // live-tracking weak point), teacher = overall mAP (label quality).
+  const finish = async (
+    type: 'student' | 'teacher', version: number,
+    result: { weights: string; metrics: Record<string, number> }, metricKey: string,
+  ) => {
+    const current = await getProductionModel(type);
+    const currentScore = current ? (JSON.parse(current.metrics)[metricKey] ?? 0) : 0;
+    const newScore = result.metrics[metricKey] ?? 0;
+    const promote = !current || newScore > currentScore;
+    const model = await prisma.modelVersion.create({
+      data: {
+        type, version,
+        weightsPath: result.weights,
+        metrics: JSON.stringify(result.metrics),
+        status: promote ? 'production' : 'ready',
+        trainingJobId: jobId,
+      },
+    });
+    if (promote && current && current.status === 'production') {
+      await prisma.modelVersion.update({ where: { id: current.id }, data: { status: 'archived' } });
+    }
+    return { model, promote, newScore, currentScore };
+  };
 
-  const model = await prisma.modelVersion.create({
-    data: {
-      type: 'student',
-      version,
-      weightsPath: result.weights,
-      metrics: JSON.stringify(result.metrics),
-      status: promote ? 'production' : 'ready',
-      trainingJobId: jobId,
-    },
-  });
-  if (promote && current && current.status === 'production') {
-    await prisma.modelVersion.update({ where: { id: current.id }, data: { status: 'archived' } });
-  }
+  const nextVersion = async (type: string) => {
+    const last = await prisma.modelVersion.findFirst({ where: { type }, orderBy: { version: 'desc' } });
+    return (last?.version ?? 0) + 1;
+  };
+
+  // 1) student — fast nano, powers /live
+  const sv = await nextVersion('student');
+  const studentResult = await trainOne('student', 'yolo11n.pt', 20, `student_v${sv}`);
+  const student = await finish('student', sv, studentResult, 'ball_map50');
+
+  // 2) teacher — heavier medium model; once promoted, teacher.py auto-labels
+  //    the NEXT video with fine-tuned weights (all 6 classes), so hand-label
+  //    effort compounds instead of staying constant
+  const tv = await nextVersion('teacher');
+  const teacherResult = await trainOne('teacher', 'yolo11m.pt', 15, `teacher_v${tv}`);
+  const teacher = await finish('teacher', tv, teacherResult, 'map50');
 
   await prisma.label.updateMany({ where: { isApproved: true }, data: { usedInTraining: true } });
   await prisma.eventAnnotation.updateMany({ where: { isApproved: true }, data: { usedInTraining: true } });
@@ -133,10 +149,15 @@ async function runJob(jobId: string) {
     data: {
       status: 'done',
       finishedAt: new Date(),
-      log: `model ${name} ball_map50=${newBall.toFixed(3)} (prev ${currentBall.toFixed(3)}) -> ${promote ? 'PROMOTED to production' : 'kept as ready'}\nevents.jsonl: ${ds.eventCount} samples ready for event-detector training`,
+      log: [
+        `student_v${sv} ball_map50=${student.newScore.toFixed(3)} (prev ${student.currentScore.toFixed(3)}) -> ${student.promote ? 'PROMOTED to production' : 'kept as ready'}`,
+        `teacher_v${tv} map50=${teacher.newScore.toFixed(3)} (prev ${teacher.currentScore.toFixed(3)}) -> ${teacher.promote ? 'PROMOTED — next auto-labels use fine-tuned teacher' : 'kept as ready'}`,
+        `events.jsonl: ${ds.eventCount} samples ready for event-detector training`,
+      ].join('\n'),
     },
   });
+  const model = student.model;
 
-  if (promote) reloadStudent(); // hot-swap in-process student; ws server reloads on "reload" msg
+  if (student.promote) reloadStudent(); // hot-swap in-process student; ws server reloads on "reload" msg
   return model;
 }

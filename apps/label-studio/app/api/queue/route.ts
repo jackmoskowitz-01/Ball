@@ -1,15 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@autocode/db';
+import { computeDisagreements } from '@autocode/cv';
 
 export const dynamic = 'force-dynamic';
 
 // Active learning queries. ?mode=
 //   low_conf            — 20 frames with lowest teacher confidence (any class)
 //   low_conf_ball       — 20 frames whose lowest-confidence object is the ball
+//   disagreement        — frames where teacher & student disagree most (computes a batch on demand)
 //   unlabeled_blocks    — teacher block proposals not yet human-confirmed
 //   shots_no_shooter    — shot events missing shooterTrackingId
 export async function GET(req: NextRequest) {
   const mode = req.nextUrl.searchParams.get('mode') ?? 'low_conf';
+
+  if (mode === 'disagreement') {
+    const computed = await computeDisagreements(60);
+    const rows = await prisma.label.findMany({
+      where: { source: 'teacher', isApproved: false, disagreement: { not: null } },
+      orderBy: { disagreement: 'desc' },
+      take: 20,
+      include: { video: { select: { name: true } } },
+    });
+    return NextResponse.json(rows.map((r) => ({
+      kind: 'frame', videoId: r.videoId, videoName: r.video.name,
+      frameNumber: r.frameNumber, confidence: r.disagreement, computed,
+    })));
+  }
 
   if (mode === 'low_conf' || mode === 'low_conf_ball') {
     const rows = await prisma.label.findMany({

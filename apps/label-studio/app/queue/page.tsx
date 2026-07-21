@@ -27,6 +27,7 @@ export default function Queue() {
       <div className="card" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button className={mode === 'low_conf' ? 'primary' : ''} onClick={() => loadQueue('low_conf')}>20 lowest-confidence frames</button>
         <button className={mode === 'low_conf_ball' ? 'primary' : ''} onClick={() => loadQueue('low_conf_ball')}>20 lowest ball confidence</button>
+        <button className={mode === 'disagreement' ? 'primary' : ''} onClick={() => loadQueue('disagreement')} title="runs the student on a batch of frames and ranks by teacher/student disagreement — the highest-value frames to hand-label">Teacher↔Student disagreements</button>
         <button className={mode === 'unlabeled_blocks' ? 'primary' : ''} onClick={() => loadQueue('unlabeled_blocks')}>All unlabeled blocks</button>
         <button className={mode === 'shots_no_shooter' ? 'primary' : ''} onClick={() => loadQueue('shots_no_shooter')}>Shots without shooter</button>
       </div>

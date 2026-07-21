@@ -10,7 +10,7 @@ const TEACHER_DIR = path.join(REPO_ROOT, 'data/teacher');
 const REALTIME_DIR = path.join(REPO_ROOT, 'data/realtime');
 
 /** Extract specific frames of a video into data/frames/{videoId}/f{n}.jpg (cached). */
-function extractFrames(videoPath: string, videoId: string, frameNumbers: number[], fps: number) {
+export function extractFrames(videoPath: string, videoId: string, frameNumbers: number[], fps: number) {
   const dir = path.join(FRAMES_DIR, videoId);
   mkdirSync(dir, { recursive: true });
   const missing = [...new Set(frameNumbers)]
@@ -124,6 +124,13 @@ export async function exportDatasets() {
     if (!yoloLines.length) continue;
     copyFileSync(src, path.join(REALTIME_DIR, `images/${split}/${stem}.jpg`));
     writeFileSync(path.join(REALTIME_DIR, `labels/${split}/${stem}.txt`), yoloLines.join('\n') + '\n');
+    // ball frames are rare and the ball is tiny — duplicate them in train so
+    // the weak class gets ~2x gradient (never duplicate val: it would skew eval)
+    const hasVisibleBall = objects.some((o) => o.cls === 'ball' && o.visible !== false && !o.occluded);
+    if (split === 'train' && hasVisibleBall) {
+      copyFileSync(src, path.join(REALTIME_DIR, `images/train/${stem}_ball2.jpg`));
+      writeFileSync(path.join(REALTIME_DIR, `labels/train/${stem}_ball2.txt`), yoloLines.join('\n') + '\n');
+    }
   }
 
   writeFileSync(path.join(TEACHER_DIR, 'coco.json'), JSON.stringify({
@@ -143,12 +150,25 @@ export async function exportDatasets() {
   ].join('\n'));
 
   // ---- events.jsonl ----
+  // human-confirmed events lack pose features (the editor can't run pose) —
+  // backfill wrist/elbow from the teacher's proposal of the same event
+  const teacherEvents = await prisma.eventAnnotation.findMany({ where: { source: 'teacher' } });
   const lines: string[] = [];
   for (const ev of events) {
     const cls = EVENT_TYPE_TO_CLASS[ev.type];
     if (!cls) continue;
     const payload = JSON.parse(ev.payload);
     const feat = ev.features ? JSON.parse(ev.features) : {};
+    if (feat.wrist_y == null && ev.source === 'human') {
+      const twin = teacherEvents.find((t) => t.videoId === ev.videoId && t.type === ev.type
+        && Math.abs(t.keyFrame - ev.keyFrame) <= 5 && t.features);
+      if (twin) {
+        const tf = JSON.parse(twin.features!);
+        feat.wrist_y = tf.wrist_y ?? null;
+        feat.elbow_y = tf.elbow_y ?? null;
+        feat.ball_in_hand_dist = feat.ball_in_hand_dist ?? tf.ball_in_hand_dist ?? null;
+      }
+    }
     const framePath = framePathOf.get(ev.videoId)!(ev.keyFrame);
     const participants = [
       payload.shooterTrackingId, payload.rebounderTrackingId,

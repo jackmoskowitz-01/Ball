@@ -46,6 +46,7 @@ model Label {
   objects        String // JSON ObjectAnnotation[]
   source         String // 'teacher' | 'human'
   minConfidence  Float? // lowest teacher confidence in frame (active-learning sort)
+  disagreement   Float? // teacher-vs-student disagreement score (active learning)
   isApproved     Boolean       @default(false)
   usedInTraining Boolean       @default(false)
   updatedAt      DateTime      @updatedAt
@@ -53,6 +54,7 @@ model Label {
   @@unique([videoId, frameNumber, source])
   @@index([isApproved, usedInTraining])
   @@index([minConfidence])
+  @@index([disagreement])
 }
 
 // Temporal events with keyframes. payload = EventPayload JSON.
