@@ -15,9 +15,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const size = statSync(video.path).size;
   const range = req.headers.get('range');
   if (range) {
-    const m = range.match(/bytes=(\d+)-(\d*)/);
-    const start = m ? Number(m[1]) : 0;
-    const end = m && m[2] ? Number(m[2]) : Math.min(start + 4 * 1024 * 1024, size - 1);
+    // handle all three range forms: bytes=a-b, bytes=a-, bytes=-n (suffix —
+    // Chrome uses this to grab the trailing moov atom; mishandling it stalls
+    // playback with no error)
+    const m = range.match(/bytes=(\d*)-(\d*)/);
+    let start: number, end: number;
+    if (m && m[1] === '' && m[2] !== '') {
+      start = Math.max(0, size - Number(m[2]));
+      end = size - 1;
+    } else {
+      start = m && m[1] !== '' ? Number(m[1]) : 0;
+      end = m && m[2] !== '' ? Number(m[2]) : Math.min(start + 4 * 1024 * 1024, size - 1);
+    }
+    if (start >= size) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+    end = Math.min(end, size - 1);
     const stream = Readable.toWeb(createReadStream(video.path, { start, end })) as ReadableStream;
     return new Response(stream, {
       status: 206,
