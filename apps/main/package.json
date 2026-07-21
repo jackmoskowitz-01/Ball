@@ -1,0 +1,23 @@
+{
+  "name": "main",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3002",
+    "build": "next build",
+    "start": "next start -p 3002"
+  },
+  "dependencies": {
+    "@autocode/cv": "*",
+    "@autocode/db": "*",
+    "@autocode/types": "*",
+    "next": "^15.3.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "typescript": "^5.8.0"
+  }
+}

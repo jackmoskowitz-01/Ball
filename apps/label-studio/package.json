@@ -1,0 +1,25 @@
+{
+  "name": "label-studio",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001"
+  },
+  "dependencies": {
+    "@autocode/cv": "*",
+    "@autocode/db": "*",
+    "@autocode/types": "*",
+    "konva": "^9.3.20",
+    "next": "^15.3.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-konva": "^19.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "typescript": "^5.8.0"
+  }
+}

@@ -49,3 +49,31 @@ compiler/       Taxonomy Compiler UI
 - Timeline start drift: <0.5s vs human (80% of instances)
 - Confidence threshold: flag yellow below 70% for post-game review
 - Price: $1,500/mo per basketball team (in-season)
+
+---
+
+## Training system (Teacher/Student monorepo)
+
+Turborepo grafted onto this repo: hand-label in the **Label Studio** (Teacher,
+port 3001) → approve → the **Student** (yolo11n) auto-retrains and the
+**/live** page (port 3002) hot-swaps to the new weights.
+
+```
+apps/label-studio/   upload → teacher auto-label → correct → approve → train
+apps/main/           /live webcam pipeline (production student weights from DB)
+packages/db/         Prisma + SQLite (data/ball.db) — the only contract between apps
+packages/cv/         classes.ts ontology · teacher.py · student_server.py · train.py · export
+packages/types/      shared basketball ontology types
+```
+
+```bash
+npm install && npm run cv:setup        # one-time
+npm run db:migrate                     # one-time
+npm run dev                            # both apps (3001 studio, 3002 live)
+npm run student:server                 # ws://localhost:8765 for /live
+```
+
+Ontology: objects `ball · player(off/def) · rim · backboard · net · court`,
+events `shot(gather/RELEASE/apex/end) · rebound · assist · block · steal ·
+possession_change`. Exports: `data/teacher/coco.json`,
+`data/realtime/{data.yaml,images,labels}`, `data/realtime/events.jsonl`.

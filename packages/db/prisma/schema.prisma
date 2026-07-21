@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Video {
+  id        String   @id @default(cuid())
+  name      String
+  path      String // absolute path to video file under data/videos
+  fps       Float
+  width     Int
+  height    Int
+  frames    Int
+  // uploaded | auto_labeling | auto_labeled | in_review | approved
+  status    String   @default("uploaded")
+  holdout   Boolean  @default(false) // held-out 20% for evaluation, never trained on
+  createdAt DateTime @default(now())
+
+  labels        Label[]
+  events        EventAnnotation[]
+  labelVersions LabelVersion[]
+}
+
+model LabelVersion {
+  id        String   @id @default(cuid())
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id])
+  note      String?
+  createdAt DateTime @default(now())
+  labels    Label[]
+}
+
+// One row per (video, frame): all object annotations for that frame as JSON
+// (ObjectAnnotation[] from @autocode/types).
+model Label {
+  id             String        @id @default(cuid())
+  videoId        String
+  video          Video         @relation(fields: [videoId], references: [id])
+  versionId      String?
+  version        LabelVersion? @relation(fields: [versionId], references: [id])
+  frameNumber    Int
+  objects        String // JSON ObjectAnnotation[]
+  source         String // 'teacher' | 'human'
+  minConfidence  Float? // lowest teacher confidence in frame (active-learning sort)
+  isApproved     Boolean       @default(false)
+  usedInTraining Boolean       @default(false)
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([videoId, frameNumber, source])
+  @@index([isApproved, usedInTraining])
+  @@index([minConfidence])
+}
+
+// Temporal events with keyframes. payload = EventPayload JSON.
+model EventAnnotation {
+  id             String   @id @default(cuid())
+  videoId        String
+  video          Video    @relation(fields: [videoId], references: [id])
+  type           String // shot | rebound | assist | block | steal | possession_change
+  keyFrame       Int // releaseFrame / rebound endFrame / passFrame / blockFrame / stealFrame
+  startFrame     Int?
+  endFrame       Int?
+  payload        String // JSON EventPayload
+  features       String? // JSON EventKeyframeFeatures at keyFrame
+  source         String // 'teacher' | 'human'
+  confidence     Float?
+  isApproved     Boolean  @default(false)
+  usedInTraining Boolean  @default(false)
+  updatedAt      DateTime @updatedAt
+
+  @@index([videoId, type])
+  @@index([isApproved, usedInTraining])
+}
+
+model DatasetVersion {
+  id          String        @id @default(cuid())
+  version     Int           @unique
+  classCounts String // JSON {className: count} incl. event classes
+  labelCount  Int
+  eventCount  Int
+  createdAt   DateTime      @default(now())
+  jobs        TrainingJob[]
+}
+
+model TrainingJob {
+  id               String          @id @default(cuid())
+  type             String // 'student' | 'teacher' | 'event'
+  status           String          @default("queued") // queued | running | done | failed
+  datasetVersionId String?
+  datasetVersion   DatasetVersion? @relation(fields: [datasetVersionId], references: [id])
+  log              String          @default("")
+  createdAt        DateTime        @default(now())
+  finishedAt       DateTime?
+  models           ModelVersion[]
+}
+
+model ModelVersion {
+  id            String       @id @default(cuid())
+  type          String // 'student' | 'teacher' | 'event'
+  version       Int
+  weightsPath   String
+  metrics       String // JSON: per-class mAP50 etc. e.g. {ball_map50: 0.42, map50: 0.5}
+  status        String       @default("ready") // ready | production | archived
+  trainingJobId String?
+  trainingJob   TrainingJob? @relation(fields: [trainingJobId], references: [id])
+  createdAt     DateTime     @default(now())
+
+  @@index([type, status])
+}

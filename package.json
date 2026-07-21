@@ -1,0 +1,21 @@
+{
+  "name": "autocode",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "db:migrate": "npm run migrate -w @autocode/db",
+    "db:studio": "npm run studio -w @autocode/db",
+    "student:server": "packages/cv/python/venv/bin/python packages/cv/python/student_server.py",
+    "cv:setup": "bash packages/cv/python/setup.sh"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.1",
+    "turbo": "^2.5.0"
+  },
+  "packageManager": "npm@11.11.0"
+}

@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.turbo/
+dist/
+venv/
+__pycache__/
+*.pt
+!yolo*.pt.keep
+data/ball.db
+data/ball.db-journal
+data/videos/
+data/frames/
+data/teacher/
+data/realtime/
+data/weights/
+runs/
+.DS_Store
