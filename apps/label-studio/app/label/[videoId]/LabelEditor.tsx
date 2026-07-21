@@ -474,7 +474,7 @@ export default function LabelEditor({ videoId }: { videoId: string }) {
 
   const triggerTraining = async () => {
     const r = await fetch('/api/trigger-training', { method: 'POST' }).then((r) => r.json());
-    say(r.started ? `training job ${r.jobId.slice(-6)} started — watch /queue` : `not started: ${r.reason}`, !r.started);
+    say(r.started ? `training job ${r.jobId.slice(-6)} started — watch /queue` : r.reason);
   };
 
   // ---------- render ----------

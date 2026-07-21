@@ -27,7 +27,19 @@ export async function runTrainingIfReady(): Promise<
     return { started: false, reason: `${newLabels + newEvents}/${MIN_NEW_APPROVED} new approved labels` };
   }
   const running = await prisma.trainingJob.findFirst({ where: { status: { in: ['queued', 'running'] } } });
-  if (running) return { started: false, reason: `job ${running.id} already ${running.status}` };
+  if (running) {
+    // a job left 'running' after a server crash would block training forever —
+    // treat anything older than 2h as dead and clear it
+    const ageMin = (Date.now() - running.createdAt.getTime()) / 60000;
+    if (ageMin > 120) {
+      await prisma.trainingJob.update({
+        where: { id: running.id },
+        data: { status: 'failed', finishedAt: new Date(), log: running.log + '\nmarked stale after 2h' },
+      });
+    } else {
+      return { started: false, reason: `training already in progress (~${Math.round(ageMin)}min in) — watch /queue` };
+    }
+  }
 
   const job = await prisma.trainingJob.create({ data: { type: 'student', status: 'queued' } });
   // fire and forget — the route returns immediately, /queue shows progress
